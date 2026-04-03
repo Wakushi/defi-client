@@ -5,6 +5,7 @@ import { type FormEvent, useState } from "react";
 type SuccessPayload = {
   username: string;
   walletAddress: string;
+  gasFundTxHash?: string;
   faucetTxHash?: string;
 };
 
@@ -29,6 +30,7 @@ export function SignupForm() {
         error?: string;
         walletAddress?: string;
         username?: string;
+        gasFundTxHash?: string;
         faucetTxHash?: string;
       };
       if (!res.ok) {
@@ -39,6 +41,7 @@ export function SignupForm() {
         setSuccess({
           username: data.username,
           walletAddress: data.walletAddress,
+          gasFundTxHash: data.gasFundTxHash,
           faucetTxHash: data.faucetTxHash,
         });
         setUsername("");
@@ -67,6 +70,16 @@ export function SignupForm() {
             {success.walletAddress}
           </p>
         </div>
+        {success.gasFundTxHash ? (
+          <div className="space-y-1">
+            <p className="text-xs font-medium uppercase tracking-wider text-[color-mix(in_oklab,var(--foreground)55%,transparent)]">
+              Gas top-up (dispatcher)
+            </p>
+            <p className="break-all rounded-lg bg-[color-mix(in_oklab,var(--foreground)8%,transparent)] px-3 py-2 font-mono text-sm">
+              {success.gasFundTxHash}
+            </p>
+          </div>
+        ) : null}
         {success.faucetTxHash ? (
           <div className="space-y-1">
             <p className="text-xs font-medium uppercase tracking-wider text-[color-mix(in_oklab,var(--foreground)55%,transparent)]">

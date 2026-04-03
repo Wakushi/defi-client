@@ -1,11 +1,12 @@
 import type { DynamicEvmWalletClient } from "@dynamic-labs-wallet/node-evm";
 import {
   createPublicClient,
-  defineChain,
   encodeFunctionData,
   http,
   type TransactionSerializable,
 } from "viem";
+
+import { getFaucetChain } from "@/lib/evm/faucet-chain";
 
 /** Same ABI as your thirdweb `getContract` snippet — faucet USDC / test token. */
 export const getFreeDaiAbi = [
@@ -26,23 +27,9 @@ export function isGetFreeDaiConfigured(): boolean {
   );
 }
 
-function faucetChain() {
-  const id = Number(process.env.FAUCET_CHAIN_ID);
-  const url = process.env.FAUCET_RPC_URL;
-  if (!url || !Number.isInteger(id) || id <= 0) {
-    throw new Error("Invalid FAUCET_CHAIN_ID or FAUCET_RPC_URL");
-  }
-  return defineChain({
-    id,
-    name: "Faucet chain",
-    nativeCurrency: { decimals: 18, name: "Ether", symbol: "ETH" },
-    rpcUrls: { default: { http: [url] } },
-  });
-}
-
 /**
  * Signs with Dynamic MPC (same password as wallet creation) and broadcasts via RPC.
- * Requires the new account to have enough native gas on `FAUCET_RPC_URL`’s chain.
+ * Fund the user with {@link fundUserGasFromDispatcher} first if they start with 0 balance.
  */
 export async function sendGetFreeDaiTransaction(params: {
   evmClient: DynamicEvmWalletClient;
@@ -50,7 +37,7 @@ export async function sendGetFreeDaiTransaction(params: {
   password: string;
 }): Promise<`0x${string}`> {
   const contract = process.env.USDC_FAUCET_CONTRACT_ADDRESS as `0x${string}`;
-  const chain = faucetChain();
+  const chain = getFaucetChain();
   const publicClient = createPublicClient({
     chain,
     transport: http(chain.rpcUrls.default.http[0]),

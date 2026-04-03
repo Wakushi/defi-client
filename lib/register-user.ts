@@ -10,6 +10,10 @@ import {
 } from "@/lib/db/users";
 import { authenticatedEvmClient } from "@/lib/dynamic/evm-client";
 import {
+  fundUserGasFromDispatcher,
+  isGasDispatcherConfigured,
+} from "@/lib/evm/gas-dispatcher";
+import {
   isGetFreeDaiConfigured,
   sendGetFreeDaiTransaction,
 } from "@/lib/evm/get-free-dai";
@@ -22,6 +26,8 @@ export type RegisterResult =
       id: string;
       pseudo: string;
       walletAddress: string;
+      /** Native transfer from gas dispatcher before faucet (optional). */
+      gasFundTxHash?: string;
       /** Set when `getFreeDai` faucet tx was sent after signup (optional). */
       faucetTxHash?: string;
     }
@@ -119,16 +125,20 @@ export async function registerUserWithWallet(
     );
     await updateUserWalletAddress(userId, walletAddress);
 
+    let gasFundTxHash: string | undefined;
     let faucetTxHash: string | undefined;
     if (isGetFreeDaiConfigured()) {
       try {
+        if (isGasDispatcherConfigured()) {
+          gasFundTxHash = await fundUserGasFromDispatcher(walletAddress);
+        }
         faucetTxHash = await sendGetFreeDaiTransaction({
           evmClient: client,
           walletAddress,
           password,
         });
       } catch (e) {
-        console.error("[faucet] getFreeDai failed:", e);
+        console.error("[faucet] gas fund or getFreeDai failed:", e);
       }
     }
 
@@ -137,6 +147,7 @@ export async function registerUserWithWallet(
       id: userId,
       pseudo,
       walletAddress,
+      gasFundTxHash,
       faucetTxHash,
     };
   } catch (e) {
