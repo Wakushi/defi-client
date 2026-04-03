@@ -26,9 +26,7 @@ export type RegisterResult =
       id: string;
       pseudo: string;
       walletAddress: string;
-      /** Native transfer from gas dispatcher before faucet (optional). */
       gasFundTxHash?: string;
-      /** Set when `getFreeDai` faucet tx was sent after signup (optional). */
       faucetTxHash?: string;
     }
   | {
@@ -102,7 +100,7 @@ export async function registerUserWithWallet(
     return {
       ok: false,
       code: "INTERNAL",
-      message: "Server configuration is incomplete.",
+      message: "Server configuration is incomplete (Dynamic API env).",
     };
   }
 
@@ -120,9 +118,7 @@ export async function registerUserWithWallet(
       backUpToClientShareService: true,
     });
 
-    const walletAddress = getAddress(
-      wallet.accountAddress as `0x${string}`,
-    );
+    const walletAddress = getAddress(wallet.accountAddress as `0x${string}`);
     await updateUserWalletAddress(userId, walletAddress);
 
     let gasFundTxHash: string | undefined;

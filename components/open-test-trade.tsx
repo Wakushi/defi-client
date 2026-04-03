@@ -2,8 +2,11 @@
 
 import { type FormEvent, useState } from "react";
 
-export function OpenTestTradeForm() {
-  const [pseudo, setPseudo] = useState("");
+type Props = {
+  sessionUsername?: string;
+};
+
+export function OpenTestTradeForm({ sessionUsername }: Props) {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -20,7 +23,8 @@ export function OpenTestTradeForm() {
       const res = await fetch("/api/trade/open-test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pseudo, password }),
+        credentials: "include",
+        body: JSON.stringify({ password }),
       });
       const data = (await res.json()) as {
         error?: string;
@@ -45,27 +49,25 @@ export function OpenTestTradeForm() {
       <div className="space-y-1">
         <h2 className="text-lg font-semibold tracking-tight">Gains — test openTrade</h2>
         <p className="text-sm text-[color-mix(in_oklab,var(--foreground)65%,transparent)]">
-          Hardcoded small LONG on pair 0 (10 USDC collat, leverage 10000). Same chain as{" "}
-          <code className="text-xs">FAUCET_CHAIN_ID</code>.
+          Dynamic MPC: enter your wallet password to sign approve + openTrade.
+          {sessionUsername ? (
+            <>
+              {" "}
+              Signed in as <span className="font-medium text-foreground">{sessionUsername}</span>.
+            </>
+          ) : null}
         </p>
       </div>
       <form onSubmit={onSubmit} className="space-y-3">
         <input
-          name="pseudo"
-          placeholder="Username"
-          value={pseudo}
-          onChange={(e) => setPseudo(e.target.value)}
-          className="w-full rounded-xl border border-[color-mix(in_oklab,var(--foreground)15%,transparent)] bg-background px-3 py-2 text-sm"
-          autoComplete="username"
-        />
-        <input
           name="password"
           type="password"
-          placeholder="Password (Dynamic wallet)"
+          placeholder="Wallet password (same as signup)"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           className="w-full rounded-xl border border-[color-mix(in_oklab,var(--foreground)15%,transparent)] bg-background px-3 py-2 text-sm"
           autoComplete="current-password"
+          required
         />
         <button
           type="submit"

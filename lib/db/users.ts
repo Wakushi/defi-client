@@ -2,6 +2,14 @@ import { getAddress } from "viem";
 
 import { getDb } from "./index";
 
+export async function findUserById(id: string) {
+  return getDb()
+    .selectFrom("users")
+    .selectAll()
+    .where("id", "=", id)
+    .executeTakeFirst();
+}
+
 /** Full user row when the username (`pseudo` column) exists. */
 export async function findUserByPseudo(pseudo: string) {
   return getDb()
@@ -40,6 +48,7 @@ export async function saveUser(input: {
       pseudo: input.pseudo,
       password_hash: input.password_hash,
       wallet_address: null,
+      encrypted_private_key: null,
     })
     .returning("id")
     .executeTakeFirstOrThrow();

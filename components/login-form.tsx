@@ -6,7 +6,7 @@ type Props = {
   onSuccess?: () => void | Promise<void>;
 };
 
-export function SignupForm({ onSuccess }: Props) {
+export function LoginForm({ onSuccess }: Props) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -17,7 +17,7 @@ export function SignupForm({ onSuccess }: Props) {
     setError(null);
     setLoading(true);
     try {
-      const res = await fetch("/api/signup", {
+      const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -25,14 +25,14 @@ export function SignupForm({ onSuccess }: Props) {
       });
       const data = (await res.json()) as { error?: string };
       if (!res.ok) {
-        setError(data.error ?? "Something went wrong.");
+        setError(data.error ?? "Login failed.");
         return;
       }
       setUsername("");
       setPassword("");
       await onSuccess?.();
     } catch {
-      setError("Network error. Check your connection.");
+      setError("Network error.");
     } finally {
       setLoading(false);
     }
@@ -44,46 +44,42 @@ export function SignupForm({ onSuccess }: Props) {
       className="mx-auto w-full max-w-md space-y-6 rounded-2xl border border-[color-mix(in_oklab,var(--foreground)12%,transparent)] bg-[color-mix(in_oklab,var(--foreground)4%,transparent)] p-8"
     >
       <div className="space-y-1">
-        <h1 className="text-xl font-semibold tracking-tight">Create an account</h1>
+        <h1 className="text-xl font-semibold tracking-tight">Log in</h1>
         <p className="text-sm text-[color-mix(in_oklab,var(--foreground)65%,transparent)]">
-          Pick a username and password. A Dynamic embedded wallet is created on the server (Node SDK); the same password secures your wallet for signing trades.
+          Use the same username and password as when you signed up.
         </p>
       </div>
 
       <div className="space-y-4">
         <div className="space-y-2">
-          <label htmlFor="username" className="text-sm font-medium">
+          <label htmlFor="login-username" className="text-sm font-medium">
             Username
           </label>
           <input
-            id="username"
+            id="login-username"
             name="username"
             type="text"
             autoComplete="username"
             required
-            minLength={2}
-            maxLength={32}
             value={username}
             onChange={(ev) => setUsername(ev.target.value)}
-            className="w-full rounded-xl border border-[color-mix(in_oklab,var(--foreground)15%,transparent)] bg-background px-3 py-2.5 text-sm outline-none ring-offset-background transition focus:ring-2 focus:ring-[color-mix(in_oklab,var(--foreground)35%,transparent)]"
+            className="w-full rounded-xl border border-[color-mix(in_oklab,var(--foreground)15%,transparent)] bg-background px-3 py-2.5 text-sm outline-none ring-offset-background focus:ring-2 focus:ring-[color-mix(in_oklab,var(--foreground)35%,transparent)]"
             placeholder="your_username"
           />
         </div>
         <div className="space-y-2">
-          <label htmlFor="password" className="text-sm font-medium">
+          <label htmlFor="login-password" className="text-sm font-medium">
             Password
           </label>
           <input
-            id="password"
+            id="login-password"
             name="password"
             type="password"
-            autoComplete="new-password"
+            autoComplete="current-password"
             required
-            minLength={8}
             value={password}
             onChange={(ev) => setPassword(ev.target.value)}
-            className="w-full rounded-xl border border-[color-mix(in_oklab,var(--foreground)15%,transparent)] bg-background px-3 py-2.5 text-sm outline-none ring-offset-background transition focus:ring-2 focus:ring-[color-mix(in_oklab,var(--foreground)35%,transparent)]"
-            placeholder="At least 8 characters"
+            className="w-full rounded-xl border border-[color-mix(in_oklab,var(--foreground)15%,transparent)] bg-background px-3 py-2.5 text-sm outline-none ring-offset-background focus:ring-2 focus:ring-[color-mix(in_oklab,var(--foreground)35%,transparent)]"
           />
         </div>
       </div>
@@ -99,7 +95,7 @@ export function SignupForm({ onSuccess }: Props) {
         disabled={loading}
         className="w-full rounded-xl bg-foreground py-2.5 text-sm font-medium text-background transition enabled:hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
       >
-        {loading ? "Creating…" : "Create account & wallet"}
+        {loading ? "Signing in…" : "Log in"}
       </button>
     </form>
   );

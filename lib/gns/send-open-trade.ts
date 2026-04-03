@@ -31,8 +31,8 @@ function tradeToTuple(t: GnsTrade) {
 }
 
 /**
- * `openTrade` on Gains diamond — same chain/RPC as `FAUCET_*` env (e.g. Arbitrum Sepolia).
- * Call {@link approveCollateralIfNeeded} first so the diamond can pull USDC.
+ * `openTrade` on Gains diamond — Dynamic MPC signing.
+ * Call {@link approveCollateralIfNeeded} first.
  */
 export async function sendGnsOpenTrade(params: {
   evmClient: DynamicEvmWalletClient;

@@ -18,6 +18,7 @@
     "@dynamic-labs-wallet/core": "^0.0.322",
     "@dynamic-labs-wallet/node-evm": "^0.0.322",
     "bcryptjs": "^3.0.3",
+    "jose": "^6.2.2",
     "kysely": "^0.28.15",
     "next": "16.2.2",
     "pg": "^8.20.0",

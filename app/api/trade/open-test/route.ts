@@ -1,9 +1,10 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { getAddress } from "viem";
 
+import { getSessionFromRequest } from "@/lib/auth/session";
 import { authenticatedEvmClient } from "@/lib/dynamic/evm-client";
-import { findUserByPseudo } from "@/lib/db/users";
+import { findUserById } from "@/lib/db/users";
 import { approveCollateralIfNeeded } from "@/lib/gns/approve-collateral-if-needed";
 import { buildHardcodedTestTrade } from "@/lib/gns/build-test-trade";
 import { sendGnsOpenTrade } from "@/lib/gns/send-open-trade";
@@ -11,12 +12,17 @@ import { isFaucetChainConfigured } from "@/lib/evm/faucet-chain";
 
 export const runtime = "nodejs";
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   if (!isFaucetChainConfigured()) {
     return NextResponse.json(
       { error: "FAUCET_RPC_URL and FAUCET_CHAIN_ID must be set (same chain as Gains)." },
       { status: 500 },
     );
+  }
+
+  const session = await getSessionFromRequest(request);
+  if (!session) {
+    return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   }
 
   let body: unknown;
@@ -26,13 +32,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
 
-  const pseudo =
-    typeof body === "object" &&
-    body !== null &&
-    "pseudo" in body &&
-    typeof (body as { pseudo: unknown }).pseudo === "string"
-      ? (body as { pseudo: string }).pseudo.trim()
-      : "";
   const password =
     typeof body === "object" &&
     body !== null &&
@@ -41,21 +40,21 @@ export async function POST(request: Request) {
       ? (body as { password: string }).password
       : "";
 
-  if (!pseudo || !password) {
+  if (!password) {
     return NextResponse.json(
-      { error: "pseudo and password are required." },
+      { error: "password is required (Dynamic wallet signing)." },
       { status: 400 },
     );
   }
 
-  const user = await findUserByPseudo(pseudo);
-  if (!user) {
-    return NextResponse.json({ error: "User not found." }, { status: 404 });
+  const user = await findUserById(session.userId);
+  if (!user || user.pseudo !== session.pseudo) {
+    return NextResponse.json({ error: "Session invalid." }, { status: 401 });
   }
 
-  const ok = await bcrypt.compare(password, user.password_hash);
-  if (!ok) {
-    return NextResponse.json({ error: "Invalid credentials." }, { status: 401 });
+  const passwordOk = await bcrypt.compare(password, user.password_hash);
+  if (!passwordOk) {
+    return NextResponse.json({ error: "Invalid password." }, { status: 401 });
   }
 
   if (!user.wallet_address) {

@@ -37,8 +37,7 @@ export function getGnsDiamondAddress(): Address {
 }
 
 /**
- * If current allowance is below minAmount, approve maxUint256 for the diamond (same pattern as approveCollatIfNeeded).
- * Returns tx hash when an approve was sent, undefined if already sufficient.
+ * If current allowance is below minAmount, approve maxUint256 for the diamond (Dynamic MPC).
  */
 export async function approveCollateralIfNeeded(params: {
   evmClient: DynamicEvmWalletClient;
@@ -50,8 +49,10 @@ export async function approveCollateralIfNeeded(params: {
   const spender = getGnsDiamondAddress();
 
   const chain = getFaucetChain();
-  const transport = http(chain.rpcUrls.default.http[0]);
-  const publicClient = createPublicClient({ chain, transport });
+  const publicClient = createPublicClient({
+    chain,
+    transport: http(chain.rpcUrls.default.http[0]),
+  });
 
   const allowance = await publicClient.readContract({
     address: token,

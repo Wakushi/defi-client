@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { attachSessionCookie } from "@/lib/auth/session";
 import { registerUserWithWallet } from "@/lib/register-user";
 
 export const runtime = "nodejs";
@@ -41,7 +42,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: result.message }, { status });
     }
 
-    return NextResponse.json({
+    const res = NextResponse.json({
       id: result.id,
       username: result.pseudo,
       walletAddress: result.walletAddress,
@@ -52,6 +53,8 @@ export async function POST(request: Request) {
         ? { faucetTxHash: result.faucetTxHash }
         : {}),
     });
+    await attachSessionCookie(res, result.id, result.pseudo);
+    return res;
   } catch (e) {
     console.error(e);
     return NextResponse.json(
