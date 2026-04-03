@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 
 import { getSessionFromRequest } from "@/lib/auth/session";
+import { parseDuelTradeConfig, parseReadyState } from "@/lib/db/duel-ready";
 import { findDuelWithPseudos } from "@/lib/db/duels";
 import { findUserById } from "@/lib/db/users";
 
@@ -36,6 +37,24 @@ export async function GET(
     }
   }
 
+  const readyState = parseReadyState(duel.ready_state);
+  let myTradeConfig = null;
+  let myReady = false;
+  if (viewer?.isCreator) {
+    myTradeConfig = parseDuelTradeConfig(duel.creator_trade_config);
+    myReady = readyState[0] === 1;
+  } else if (viewer?.isOpponent) {
+    myTradeConfig = parseDuelTradeConfig(duel.opponent_trade_config);
+    myReady = readyState[1] === 1;
+  }
+
+  const readyBothAt =
+    duel.ready_both_at instanceof Date
+      ? duel.ready_both_at.toISOString()
+      : duel.ready_both_at
+        ? new Date(duel.ready_both_at as string).toISOString()
+        : null;
+
   return NextResponse.json({
     id: duel.id,
     creatorPseudo: duel.creator_pseudo,
@@ -45,5 +64,10 @@ export async function GET(
     createdAt: duel.created_at.toISOString(),
     duelFull: duel.opponent_id !== null,
     viewer,
+    readyState,
+    readyBothAt,
+    bothReady: readyState[0] === 1 && readyState[1] === 1,
+    myReady,
+    myTradeConfig,
   });
 }

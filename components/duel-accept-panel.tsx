@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { parseUnits } from "viem";
 
@@ -203,6 +204,14 @@ export function DuelAcceptPanel({ duelId }: Props) {
           Envoie le lien à ton adversaire : il devra se connecter, puis accepter avec un wallet qui a
           au moins {formatUsdcLabel(duel.stakeUsdc)} USDC sur la chaîne du faucet.
         </p>
+        {duel.duelFull ? (
+          <Link
+            href={`/duel/${duelId}/prepare`}
+            className="mt-4 inline-flex rounded-xl bg-foreground px-4 py-2 text-sm font-medium text-background hover:opacity-90"
+          >
+            Configurer mon trade
+          </Link>
+        ) : null}
       </div>
     );
   }
@@ -213,8 +222,14 @@ export function DuelAcceptPanel({ duelId }: Props) {
         <p className="font-medium text-foreground">Tu participes à ce duel</p>
         <p className="mt-2">
           Tu es enregistré comme adversaire de <span className="font-medium">{duel.creatorPseudo}</span>
-          . Prochaine étape : écran « prêt » et lancement du trade — à venir.
+          . Configure ton trade puis marque-toi prêt en même temps que l’hôte.
         </p>
+        <Link
+          href={`/duel/${duelId}/prepare`}
+          className="mt-4 inline-flex rounded-xl bg-foreground px-4 py-2 text-sm font-medium text-background hover:opacity-90"
+        >
+          Configurer mon trade
+        </Link>
       </div>
     );
   }

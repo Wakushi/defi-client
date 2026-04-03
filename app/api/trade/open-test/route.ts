@@ -12,6 +12,7 @@ import {
   getGnsCollateralTokenAddress,
 } from "@/lib/gns/approve-collateral-if-needed";
 import { buildHardcodedTestTrade } from "@/lib/gns/build-test-trade";
+import { serializeTradeForJson } from "@/lib/gns/serialize-trade-for-json";
 import { sendGnsOpenTrade } from "@/lib/gns/send-open-trade";
 
 export const runtime = "nodejs";
@@ -214,16 +215,4 @@ export async function POST(request: NextRequest) {
       { status: 502 },
     );
   }
-}
-
-function serializeTradeForJson(t: import("@/types/gns-trade").GnsTrade) {
-  return {
-    ...t,
-    collateralAmount: t.collateralAmount.toString(),
-    openPrice: t.openPrice.toString(),
-    tp: t.tp.toString(),
-    sl: t.sl.toString(),
-    positionSizeToken: t.positionSizeToken.toString(),
-    __placeholder: t.__placeholder.toString(),
-  };
 }

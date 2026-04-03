@@ -19,6 +19,12 @@ export interface DuelsTable {
   stake_usdc: string;
   /** Fenêtre de temps pour le trade avant fermeture auto. */
   duration_seconds: number;
+  /** [créateur, adversaire] chaque slot 0 ou 1 = prêt pour signer. */
+  ready_state: unknown;
+  /** Horodatage quand les deux sont prêts (synchro compte à rebours). */
+  ready_both_at: Date | null;
+  creator_trade_config: unknown | null;
+  opponent_trade_config: unknown | null;
   created_at: Generated<Date>;
   /** Renseigné par défaut côté SQL ; pas passé à l’insert Kysely. */
   updated_at: ColumnType<Date, never, Date>;
