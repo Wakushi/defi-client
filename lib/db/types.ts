@@ -12,6 +12,21 @@ export interface UsersTable {
   updated_at: ColumnType<Date, never, Date>;
 }
 
+/** Partie / duel — paramètres fixés par le créateur, lien partageable. */
+export interface DuelsTable {
+  id: Generated<string>;
+  creator_id: string;
+  opponent_id: string | null;
+  /** Mise par joueur en USDC (pg renvoie NUMERIC en string). */
+  stake_usdc: string;
+  /** Fenêtre de temps pour le trade avant fermeture auto. */
+  duration_seconds: number;
+  created_at: Generated<Date>;
+  /** Renseigné par défaut côté SQL ; pas passé à l’insert Kysely. */
+  updated_at: ColumnType<Date, never, Date>;
+}
+
 export interface Database {
   users: UsersTable;
+  duels: DuelsTable;
 }

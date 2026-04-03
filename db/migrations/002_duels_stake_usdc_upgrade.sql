@@ -1,0 +1,8 @@
+-- Optionnel : si `duels` a été créée avec creator_id en TEXT au lieu d’UUID :
+-- DROP TABLE duels;
+-- Puis ré-exécuter 001_duels.sql (types TEXT vs uuid sur users.id cassent la FK).
+--
+-- Ancienne migration stake_amount_raw → stake_usdc (si besoin) :
+-- ALTER TABLE duels ADD COLUMN stake_usdc NUMERIC(20, 6);
+-- UPDATE duels SET stake_usdc = (stake_amount_raw::numeric / 1000000) WHERE stake_usdc IS NULL;
+-- etc.

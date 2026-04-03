@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { LoginForm } from "@/components/login-form";
 import { OpenTestTradeForm } from "@/components/open-test-trade";
@@ -20,19 +21,33 @@ export function HomeAuth() {
   const [mode, setMode] = useState<"signup" | "login">("signup");
   const [tradeCollateral, setTradeCollateral] = useState<TradeCollateralSelection | null>(null);
 
+  const prevWalletRef = useRef<string | null | undefined>(undefined);
+
   const refresh = useCallback(async () => {
     const r = await fetch("/api/auth/me", { credentials: "include" });
     const data = (await r.json()) as { user: MeUser | null };
     setUser(data.user ?? null);
   }, []);
 
+  /* eslint-disable react-hooks/set-state-in-effect -- chargement initial /api/auth/me */
   useEffect(() => {
-    refresh().finally(() => setLoading(false));
+    let cancelled = false;
+    void refresh().finally(() => {
+      if (!cancelled) queueMicrotask(() => setLoading(false));
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [refresh]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
+  const walletKey = user?.walletAddress ?? null;
   useEffect(() => {
-    setTradeCollateral(null);
-  }, [user?.walletAddress]);
+    if (prevWalletRef.current !== undefined && prevWalletRef.current !== walletKey) {
+      queueMicrotask(() => setTradeCollateral(null));
+    }
+    prevWalletRef.current = walletKey;
+  }, [walletKey]);
 
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
@@ -58,13 +73,21 @@ export function HomeAuth() {
               </p>
               <p className="text-lg font-semibold tracking-tight">{user.username}</p>
             </div>
-            <button
-              type="button"
-              onClick={() => void logout()}
-              className="shrink-0 rounded-lg border border-[color-mix(in_oklab,var(--foreground)18%,transparent)] px-3 py-1.5 text-sm font-medium hover:bg-[color-mix(in_oklab,var(--foreground)8%,transparent)]"
-            >
-              Log out
-            </button>
+            <div className="flex shrink-0 flex-col items-end gap-2 sm:flex-row sm:items-start">
+              <Link
+                href="/duel/new"
+                className="rounded-lg bg-foreground px-3 py-1.5 text-sm font-medium text-background hover:opacity-90"
+              >
+                Duel
+              </Link>
+              <button
+                type="button"
+                onClick={() => void logout()}
+                className="rounded-lg border border-[color-mix(in_oklab,var(--foreground)18%,transparent)] px-3 py-1.5 text-sm font-medium hover:bg-[color-mix(in_oklab,var(--foreground)8%,transparent)]"
+              >
+                Log out
+              </button>
+            </div>
           </div>
           {user.walletAddress ? (
             <div className="space-y-1">
