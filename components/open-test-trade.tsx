@@ -1,12 +1,16 @@
 "use client";
 
 import { type FormEvent, useState } from "react";
+import { formatUnits } from "viem";
+
+import type { TradeCollateralSelection } from "@/types/trade-collateral";
 
 type Props = {
   sessionUsername?: string;
+  collateralSelection: TradeCollateralSelection | null;
 };
 
-export function OpenTestTradeForm({ sessionUsername }: Props) {
+export function OpenTestTradeForm({ sessionUsername, collateralSelection }: Props) {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -15,6 +19,7 @@ export function OpenTestTradeForm({ sessionUsername }: Props) {
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
+    if (!collateralSelection) return;
     setError(null);
     setTxHash(null);
     setApproveTxHash(null);
@@ -24,7 +29,11 @@ export function OpenTestTradeForm({ sessionUsername }: Props) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({
+          password,
+          collateralAmountRaw: collateralSelection.collateralAmountRaw,
+          tokenAddress: collateralSelection.tokenAddress,
+        }),
       });
       const data = (await res.json()) as {
         error?: string;
@@ -49,11 +58,24 @@ export function OpenTestTradeForm({ sessionUsername }: Props) {
       <div className="space-y-1">
         <h2 className="text-lg font-semibold tracking-tight">Gains — test openTrade</h2>
         <p className="text-sm text-[color-mix(in_oklab,var(--foreground)65%,transparent)]">
-          Dynamic MPC: enter your wallet password to sign approve + openTrade.
+          Dynamic MPC : mot de passe pour signer approve + openTrade. Le collatéral envoyé au
+          contrat est celui choisi dans le bloc « Montant à utiliser pour le trade » (
+          <span className="font-medium text-foreground">
+            {collateralSelection
+              ? (() => {
+                  try {
+                    return `${formatUnits(BigInt(collateralSelection.collateralAmountRaw), collateralSelection.decimals)} ${collateralSelection.symbol}`;
+                  } catch {
+                    return `${collateralSelection.collateralAmountRaw} (${collateralSelection.symbol})`;
+                  }
+                })()
+              : "— choisis un montant valide au-dessus —"}
+          </span>
+          ).
           {sessionUsername ? (
             <>
               {" "}
-              Signed in as <span className="font-medium text-foreground">{sessionUsername}</span>.
+              Connecté : <span className="font-medium text-foreground">{sessionUsername}</span>.
             </>
           ) : null}
         </p>
@@ -71,10 +93,10 @@ export function OpenTestTradeForm({ sessionUsername }: Props) {
         />
         <button
           type="submit"
-          disabled={loading}
+          disabled={loading || !collateralSelection}
           className="w-full rounded-xl bg-foreground py-2.5 text-sm font-medium text-background disabled:opacity-50"
         >
-          {loading ? "Sending…" : "Open test trade"}
+          {loading ? "Envoi…" : "Open test trade"}
         </button>
       </form>
       {error ? (

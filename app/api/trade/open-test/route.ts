@@ -1,14 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import { getAddress } from "viem";
+import { createPublicClient, getAddress, http } from "viem";
 
+import { erc20Abi } from "@/constants/erc20";
 import { getSessionFromRequest } from "@/lib/auth/session";
 import { authenticatedEvmClient } from "@/lib/dynamic/evm-client";
 import { findUserById } from "@/lib/db/users";
-import { approveCollateralIfNeeded } from "@/lib/gns/approve-collateral-if-needed";
+import { getFaucetChain, isFaucetChainConfigured } from "@/lib/evm/faucet-chain";
+import {
+  approveCollateralIfNeeded,
+  getGnsCollateralTokenAddress,
+} from "@/lib/gns/approve-collateral-if-needed";
 import { buildHardcodedTestTrade } from "@/lib/gns/build-test-trade";
 import { sendGnsOpenTrade } from "@/lib/gns/send-open-trade";
-import { isFaucetChainConfigured } from "@/lib/evm/faucet-chain";
 
 export const runtime = "nodejs";
 
@@ -32,17 +36,71 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
 
-  const password =
-    typeof body === "object" &&
-    body !== null &&
-    "password" in body &&
-    typeof (body as { password: unknown }).password === "string"
-      ? (body as { password: string }).password
-      : "";
+  const b = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
+
+  const password = typeof b.password === "string" ? b.password : "";
+  const collateralAmountRaw =
+    typeof b.collateralAmountRaw === "string" ? b.collateralAmountRaw.trim() : "";
+  const tokenAddressIn =
+    typeof b.tokenAddress === "string" ? b.tokenAddress.trim() : "";
 
   if (!password) {
     return NextResponse.json(
       { error: "password is required (Dynamic wallet signing)." },
+      { status: 400 },
+    );
+  }
+
+  if (!collateralAmountRaw || !tokenAddressIn) {
+    return NextResponse.json(
+      {
+        error:
+          "collateralAmountRaw et tokenAddress sont requis (sélectionne un actif et un montant au-dessus).",
+      },
+      { status: 400 },
+    );
+  }
+
+  let expectedCollateral: `0x${string}`;
+  try {
+    expectedCollateral = getGnsCollateralTokenAddress();
+  } catch {
+    return NextResponse.json(
+      { error: "GNS_COLLATERAL_TOKEN_ADDRESS manquant côté serveur." },
+      { status: 500 },
+    );
+  }
+
+  let tokenAddress: `0x${string}`;
+  try {
+    tokenAddress = getAddress(tokenAddressIn as `0x${string}`);
+  } catch {
+    return NextResponse.json({ error: "tokenAddress invalide." }, { status: 400 });
+  }
+
+  if (tokenAddress.toLowerCase() !== expectedCollateral.toLowerCase()) {
+    return NextResponse.json(
+      {
+        error:
+          "Le jeton sélectionné n’est pas le collatéral Gains (GNS_COLLATERAL_TOKEN_ADDRESS).",
+      },
+      { status: 400 },
+    );
+  }
+
+  let collateralWei: bigint;
+  try {
+    collateralWei = BigInt(collateralAmountRaw);
+  } catch {
+    return NextResponse.json(
+      { error: "collateralAmountRaw doit être un entier (unités du token)." },
+      { status: 400 },
+    );
+  }
+
+  if (collateralWei <= BigInt(0)) {
+    return NextResponse.json(
+      { error: "Le montant collatéral doit être strictement positif." },
       { status: 400 },
     );
   }
@@ -83,7 +141,43 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const trade = buildHardcodedTestTrade(walletAddress);
+  const chain = getFaucetChain();
+  const publicClient = createPublicClient({
+    chain,
+    transport: http(chain.rpcUrls.default.http[0]),
+  });
+
+  let onChainBalance: bigint;
+  try {
+    onChainBalance = await publicClient.readContract({
+      address: expectedCollateral,
+      abi: erc20Abi,
+      functionName: "balanceOf",
+      args: [walletAddress],
+    });
+  } catch (e) {
+    console.error("[gns] balanceOf collateral failed:", e);
+    return NextResponse.json(
+      { error: "Impossible de lire le solde du collatéral sur la chaîne faucet." },
+      { status: 502 },
+    );
+  }
+
+  if (onChainBalance < collateralWei) {
+    return NextResponse.json(
+      { error: "Solde collatéral insuffisant sur la chaîne du trade." },
+      { status: 400 },
+    );
+  }
+
+  let trade: ReturnType<typeof buildHardcodedTestTrade>;
+  try {
+    trade = buildHardcodedTestTrade(walletAddress, collateralWei);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Montant collatéral invalide.";
+    return NextResponse.json({ error: msg }, { status: 400 });
+  }
+
   const minAllowance = trade.collateralAmount + BigInt(1);
 
   try {

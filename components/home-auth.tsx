@@ -4,7 +4,9 @@ import { useCallback, useEffect, useState } from "react";
 
 import { LoginForm } from "@/components/login-form";
 import { OpenTestTradeForm } from "@/components/open-test-trade";
+import { WalletPortfolioTradePicker } from "@/components/wallet-portfolio-trade-picker";
 import { SignupForm } from "@/components/signup-form";
+import type { TradeCollateralSelection } from "@/types/trade-collateral";
 
 type MeUser = {
   id: string;
@@ -16,6 +18,7 @@ export function HomeAuth() {
   const [user, setUser] = useState<MeUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [mode, setMode] = useState<"signup" | "login">("signup");
+  const [tradeCollateral, setTradeCollateral] = useState<TradeCollateralSelection | null>(null);
 
   const refresh = useCallback(async () => {
     const r = await fetch("/api/auth/me", { credentials: "include" });
@@ -26,6 +29,10 @@ export function HomeAuth() {
   useEffect(() => {
     refresh().finally(() => setLoading(false));
   }, [refresh]);
+
+  useEffect(() => {
+    setTradeCollateral(null);
+  }, [user?.walletAddress]);
 
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
@@ -68,7 +75,16 @@ export function HomeAuth() {
             </div>
           ) : null}
         </div>
-        <OpenTestTradeForm sessionUsername={user.username} />
+        {user.walletAddress ? (
+          <WalletPortfolioTradePicker
+            walletAddress={user.walletAddress}
+            onCollateralForTradeChange={setTradeCollateral}
+          />
+        ) : null}
+        <OpenTestTradeForm
+          sessionUsername={user.username}
+          collateralSelection={user.walletAddress ? tradeCollateral : null}
+        />
       </div>
     );
   }
