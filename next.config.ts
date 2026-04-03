@@ -1,7 +1,12 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  serverExternalPackages: [
+    "pg",
+    "kysely",
+    "@dynamic-labs-wallet/node-evm",
+    "@dynamic-labs-wallet/core",
+  ],
 };
 
 export default nextConfig;

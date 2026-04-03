@@ -12,7 +12,7 @@ loadEnv({ path: resolve(root, ".env.local"), quiet: true });
 function requireEnv(name: string): string {
   const value = process.env[name];
   if (!value) {
-    throw new Error(`Variable d'environnement manquante : ${name}`);
+    throw new Error(`Missing environment variable: ${name}`);
   }
   return value;
 }
@@ -27,12 +27,12 @@ async function main() {
     thresholdSignatureScheme: ThresholdSignatureScheme.TWO_OF_TWO,
     password: requireEnv("WALLET_PASSWORD"),
     onError: (error: Error) => {
-      console.error("Erreur création wallet :", error);
+      console.error("Wallet creation error:", error);
     },
     backUpToClientShareService: true,
   });
 
-  console.log("Wallet créé :", wallet.accountAddress);
+  console.log("Wallet created:", wallet.accountAddress);
 
   const signature = await evmClient.signMessage({
     accountAddress: wallet.accountAddress,
@@ -40,7 +40,7 @@ async function main() {
     password: requireEnv("WALLET_PASSWORD"),
   });
 
-  console.log("Message signé :", signature);
+  console.log("Message signed:", signature);
 }
 
 main().catch((err) => {

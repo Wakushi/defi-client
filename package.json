@@ -17,7 +17,10 @@
   "dependencies": {
     "@dynamic-labs-wallet/core": "^0.0.322",
     "@dynamic-labs-wallet/node-evm": "^0.0.322",
+    "bcryptjs": "^3.0.3",
+    "kysely": "^0.28.15",
     "next": "16.2.2",
+    "pg": "^8.20.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "viem": "^2.47.6"
@@ -25,6 +28,7 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
+    "@types/pg": "^8.20.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "dotenv": "^17.4.0",

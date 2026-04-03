@@ -9,7 +9,7 @@ export async function authenticatedEvmClient({
 }) {
   const client = new DynamicEvmWalletClient({
     environmentId,
-    // true uniquement sur une infra compatible AWS Nitro Enclave (prod AWS).
+    // true only on AWS Nitro Enclave–compatible infrastructure (e.g. prod AWS).
     enableMPCAccelerator: false,
   });
   await client.authenticateApiToken(authToken);

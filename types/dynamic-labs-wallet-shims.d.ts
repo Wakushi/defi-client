@@ -1,4 +1,4 @@
-/** Les paquets @dynamic-labs-wallet/* 0.0.x publient des .d.ts cassés (réf. ./src/index absente). Shims minimaux pour la compilation. */
+/** @dynamic-labs-wallet/* 0.0.x ships broken .d.ts (missing ./src/index). Minimal shims for compilation. */
 
 declare module "@dynamic-labs-wallet/core" {
   export enum ThresholdSignatureScheme {
