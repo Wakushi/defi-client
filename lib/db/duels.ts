@@ -1,5 +1,4 @@
 import type { DuelPlayMode } from "@/types/play-mode"
-import type { GainsApiChain } from "@/types/gains-api"
 
 import { getDb } from "./index"
 import { findUserById } from "./users"
@@ -47,6 +46,41 @@ export async function findDuelWithPseudos(id: string) {
     creator_pseudo: creator?.pseudo ?? "?",
     opponent_pseudo: opponent?.pseudo ?? null,
   }
+}
+
+/** Duels non terminés (`duel_closed_at` null) où l’utilisateur est créateur ou adversaire. */
+export async function listOpenDuelsForUser(userId: string) {
+  const duels = await getDb()
+    .selectFrom("duels")
+    .selectAll()
+    .where("duel_closed_at", "is", null)
+    .where((eb) =>
+      eb.or([eb("creator_id", "=", userId), eb("opponent_id", "=", userId)]),
+    )
+    .orderBy("updated_at", "desc")
+    .execute()
+
+  if (duels.length === 0) return []
+
+  const userIds = new Set<string>()
+  for (const d of duels) {
+    userIds.add(d.creator_id)
+    if (d.opponent_id) userIds.add(d.opponent_id)
+  }
+
+  const rows = await getDb()
+    .selectFrom("users")
+    .select(["id", "pseudo"])
+    .where("id", "in", [...userIds])
+    .execute()
+
+  const pseudoById = new Map(rows.map((r) => [r.id, r.pseudo]))
+
+  return duels.map((d) => ({
+    ...d,
+    creator_pseudo: pseudoById.get(d.creator_id) ?? "?",
+    opponent_pseudo: d.opponent_id ? (pseudoById.get(d.opponent_id) ?? null) : null,
+  }))
 }
 
 /** Définit l’adversaire si la place est encore libre (une seule ligne mise à jour). */

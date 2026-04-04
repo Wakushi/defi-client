@@ -16,6 +16,7 @@ import {
 import { LoginForm } from "@/components/login-form"
 import { SignupForm } from "@/components/signup-form"
 import { HubPlayModeMenu } from "@/components/hub-play-mode-menu"
+import { OpenDuelsMenu } from "@/components/open-duels-menu"
 import { UniswapMainnetDemo } from "@/components/uniswap-mainnet-demo"
 import { WalletProfile } from "@/components/wallet-profile"
 
@@ -106,6 +107,7 @@ export function HomeAuth() {
         <div className={`${gamePanel} ${gamePanelTopAccent} p-6 sm:p-8`}>
           <p className={`${gameTitle} mb-4 text-lg sm:text-xl`}>Menu</p>
           <HubPlayModeMenu />
+          <OpenDuelsMenu />
         </div>
 
         <Link

@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { formatUnits, parseUnits } from "viem";
 
 import { getSessionFromRequest } from "@/lib/auth/session";
-import { insertDuel } from "@/lib/db/duels";
+import { insertDuel, listOpenDuelsForUser } from "@/lib/db/duels";
 import { findUserById } from "@/lib/db/users";
 import {
   initialDuelChainsForInsert,
@@ -10,6 +10,35 @@ import {
 } from "@/lib/duel/play-mode";
 
 export const runtime = "nodejs";
+
+export async function GET(request: NextRequest) {
+  const session = await getSessionFromRequest(request);
+  if (!session) {
+    return NextResponse.json({ error: "Not signed in." }, { status: 401 });
+  }
+
+  const user = await findUserById(session.userId);
+  if (!user || user.pseudo !== session.pseudo) {
+    return NextResponse.json({ error: "Invalid session." }, { status: 401 });
+  }
+
+  const rows = await listOpenDuelsForUser(user.id);
+
+  const duels = rows.map((d) => ({
+    id: d.id,
+    joinPath: `/duel/${d.id}`,
+    stakeUsdc: d.stake_usdc,
+    durationSeconds: d.duration_seconds,
+    playMode: normalizeDuelPlayMode(d.play_mode),
+    creatorPseudo: d.creator_pseudo,
+    opponentPseudo: d.opponent_pseudo,
+    waitingForOpponent: d.opponent_id === null,
+    isLive: d.duel_live_at != null,
+    updatedAt: d.updated_at.toISOString(),
+  }));
+
+  return NextResponse.json({ duels });
+}
 
 const MIN_DURATION_SEC = 60;
 const MAX_DURATION_SEC = 7 * 24 * 60 * 60;
