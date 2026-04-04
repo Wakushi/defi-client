@@ -187,6 +187,8 @@ export function DuelPrepareView() {
             body: JSON.stringify({
               tradeIndex: pos.index ?? 0,
               currentPriceUsdDecimaled: mark,
+              gainsChain:
+                duel?.myTradeConfig?.gainsChain ?? gainsChain,
             }),
           })
           const data = (await r.json()) as { error?: string }
@@ -208,7 +210,12 @@ export function DuelPrepareView() {
         )
       }
     })()
-  }, [duelTimerEnded, takeDuelEndCloseTargets])
+  }, [
+    duelTimerEnded,
+    takeDuelEndCloseTargets,
+    duel?.myTradeConfig?.gainsChain,
+    gainsChain,
+  ])
 
   const [readyLoading, setReadyLoading] = useState(false)
   const [readyError, setReadyError] = useState<string | null>(null)
@@ -446,6 +453,7 @@ export function DuelPrepareView() {
           leverageX,
           long,
           tradeType: 0,
+          gainsChain,
           ...(selectedReferencePrice != null &&
           Number.isFinite(selectedReferencePrice)
             ? { referencePrice: selectedReferencePrice }

@@ -336,6 +336,7 @@ export function GainsLivePositionsPanel({
           body: JSON.stringify({
             tradeIndex: pos.index ?? 0,
             currentPriceUsdDecimaled: mark,
+            gainsChain,
           }),
         });
         const data = (await r.json()) as { error?: string; txHash?: string };
@@ -352,7 +353,7 @@ export function GainsLivePositionsPanel({
         setClosingKey(null);
       }
     },
-    [historyKeyForPosition],
+    [historyKeyForPosition, gainsChain],
   );
 
   const cards = useMemo(() => {

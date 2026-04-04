@@ -40,6 +40,7 @@ export function buildGnsTradeFromDuelConfig(
   userRaw: string,
   collateralWei: bigint,
   side: DuelTradeSideConfig,
+  opts?: { collateralIndex?: number },
 ): GnsTrade {
   const user = getAddress(userRaw as Address);
 
@@ -69,6 +70,13 @@ export function buildGnsTradeFromDuelConfig(
       ? referencePriceToOpenPrice(side.referencePrice)
       : EXAMPLE_OPEN_PRICE;
 
+  const collateralIndex =
+    typeof opts?.collateralIndex === "number" &&
+    Number.isInteger(opts.collateralIndex) &&
+    opts.collateralIndex >= 0
+      ? opts.collateralIndex
+      : 3;
+
   return {
     user,
     index: 0,
@@ -76,7 +84,7 @@ export function buildGnsTradeFromDuelConfig(
     leverage,
     long: Boolean(side.long),
     isOpen: true,
-    collateralIndex: 3,
+    collateralIndex,
     tradeType: side.tradeType ?? 0,
     collateralAmount: collateralWei,
     openPrice,

@@ -1,10 +1,7 @@
 import type { DynamicEvmWalletClient } from "@dynamic-labs-wallet/node-evm";
-import { encodeFunctionData, type Address } from "viem";
+import { encodeFunctionData, type Address, type Chain } from "viem";
 
-import {
-  CONTRACT_GAINS_ARBITRUM_SEPOLIA,
-  gnsTradeAbi,
-} from "@/constants/gnsTrade";
+import { gnsTradeAbi } from "@/constants/gnsTrade";
 import { dynamicSignAndSendTransaction } from "@/lib/evm/dynamic-sign-send";
 
 /**
@@ -15,6 +12,8 @@ export async function sendGnsCloseTradeMarket(params: {
   walletAddress: Address;
   tradeIndex: number;
   expectedPriceUint64: bigint;
+  chain: Chain;
+  diamond: Address;
 }): Promise<`0x${string}`> {
   const { tradeIndex, expectedPriceUint64 } = params;
 
@@ -29,7 +28,7 @@ export async function sendGnsCloseTradeMarket(params: {
   });
 
   console.log("[Gains closeTradeMarket]", {
-    contract: CONTRACT_GAINS_ARBITRUM_SEPOLIA,
+    contract: params.diamond,
     wallet: params.walletAddress,
     tradeIndex,
     expectedPrice: expectedPriceUint64.toString(),
@@ -38,8 +37,9 @@ export async function sendGnsCloseTradeMarket(params: {
   const hash = await dynamicSignAndSendTransaction({
     evmClient: params.evmClient,
     walletAddress: params.walletAddress,
-    to: CONTRACT_GAINS_ARBITRUM_SEPOLIA,
+    to: params.diamond,
     data,
+    chain: params.chain,
   });
 
   console.log("[Gains closeTradeMarket] txHash", hash);

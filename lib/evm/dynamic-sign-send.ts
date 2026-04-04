@@ -112,14 +112,15 @@ async function tryPreviewCallBeforeGas(
   }
 }
 
-/** Build, sign with Dynamic MPC, broadcast raw tx (same chain as FAUCET_*). */
+/** Build, sign with Dynamic MPC, broadcast raw tx (chaîne = `chain` ou FAUCET_* par défaut). */
 export async function dynamicSignAndSendTransaction(params: {
   evmClient: DynamicEvmWalletClient
   walletAddress: Address
   to: Address
   data: Hex
+  chain?: Chain
 }): Promise<`0x${string}`> {
-  const chain = getFaucetChain()
+  const chain = params.chain ?? getFaucetChain()
   const transport = http(chain.rpcUrls.default.http[0])
   const publicClient = createPublicClient({ chain, transport })
 

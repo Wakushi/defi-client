@@ -2,7 +2,10 @@
 export const CONTRACT_GAINS_ARBITRUM_SEPOLIA =
   "0xd659a15812064C79E189fd950A189b15c75d3186" as const;
 
-  export const gnsTradeAbi = [
+export const CONTRACT_GAINS_ARBITRUM_ONE =
+  "0x6cD5aC19a07518A8092eEFfDA4f1174C72704eeb" as const;
+
+export const gnsTradeAbi = [
     {
       inputs: [],
       stateMutability: "nonpayable",

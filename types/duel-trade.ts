@@ -1,3 +1,5 @@
+import type { GainsApiChain } from "@/types/gains-api";
+
 /** Paramètres de trade Gains côté joueur (stockés en JSON sur le duel). */
 export type DuelTradeSideConfig = {
   pairIndex: number;
@@ -12,4 +14,6 @@ export type DuelTradeSideConfig = {
    * de démo obsolète provoque souvent un revert à l’ouverture.
    */
   referencePrice?: number;
+  /** Chaîne choisie dans le picker (exécute-trade + close sur le même réseau). */
+  gainsChain?: GainsApiChain;
 };

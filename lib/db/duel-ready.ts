@@ -1,5 +1,6 @@
 import { sql } from "kysely";
 
+import type { GainsApiChain } from "@/types/gains-api";
 import type { DuelTradeSideConfig } from "@/types/duel-trade";
 
 import { getDb } from "./index";
@@ -37,8 +38,13 @@ export function parseDuelTradeConfig(value: unknown): DuelTradeSideConfig | null
     typeof o.referencePrice === "number" && Number.isFinite(o.referencePrice) && o.referencePrice > 0
       ? o.referencePrice
       : undefined;
+  const gc = o.gainsChain;
+  let gainsChain: GainsApiChain | undefined;
+  if (gc === "Testnet" || gc === "Arbitrum" || gc === "Base") {
+    gainsChain = gc;
+  }
   if (!Number.isFinite(pairIndex) || !Number.isFinite(leverageX)) return null;
-  return { pairIndex, leverageX, long, tradeType, referencePrice };
+  return { pairIndex, leverageX, long, tradeType, referencePrice, gainsChain };
 }
 
 export async function markParticipantTradeReady(params: {

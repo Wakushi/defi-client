@@ -4,6 +4,7 @@ import { getSessionFromRequest } from "@/lib/auth/session";
 import { markParticipantTradeReady } from "@/lib/db/duel-ready";
 import { findDuelById } from "@/lib/db/duels";
 import { findUserById } from "@/lib/db/users";
+import type { GainsApiChain } from "@/types/gains-api";
 import type { DuelTradeSideConfig } from "@/types/duel-trade";
 
 export const runtime = "nodejs";
@@ -33,7 +34,12 @@ function parseBodyConfig(body: unknown): DuelTradeSideConfig | null {
   if (!Number.isFinite(leverageX) || leverageX < 1 || leverageX > 500) {
     return null;
   }
-  return { pairIndex, leverageX, long, tradeType, referencePrice };
+  const gc = o.gainsChain;
+  let gainsChain: GainsApiChain | undefined;
+  if (gc === "Testnet" || gc === "Arbitrum" || gc === "Base") {
+    gainsChain = gc;
+  }
+  return { pairIndex, leverageX, long, tradeType, referencePrice, gainsChain };
 }
 
 export async function POST(

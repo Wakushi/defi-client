@@ -9,6 +9,7 @@ import { getFaucetChain, isFaucetChainConfigured } from "@/lib/evm/faucet-chain"
 import {
   approveCollateralIfNeeded,
   getGnsCollateralTokenAddress,
+  getGnsDiamondAddress,
 } from "@/lib/gns/approve-collateral-if-needed";
 import { buildHardcodedTestTrade } from "@/lib/gns/build-test-trade";
 import { serializeTradeForJson } from "@/lib/gns/serialize-trade-for-json";
@@ -182,6 +183,8 @@ export async function POST(request: NextRequest) {
       evmClient,
       walletAddress,
       trade,
+      chain,
+      diamond: getGnsDiamondAddress(),
     });
     return NextResponse.json({
       txHash,

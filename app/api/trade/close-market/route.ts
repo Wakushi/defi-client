@@ -4,20 +4,18 @@ import { getAddress } from "viem";
 import { getSessionFromRequest } from "@/lib/auth/session";
 import { authenticatedEvmClient } from "@/lib/dynamic/evm-client";
 import { findUserById } from "@/lib/db/users";
-import { isFaucetChainConfigured } from "@/lib/evm/faucet-chain";
+import {
+  gainsUiChainToExecSurface,
+  getGainsExecRuntime,
+  isGainsExecSurfaceConfigured,
+} from "@/lib/gns/gains-exec-context";
 import { usdDecimalToGainsPriceUint64 } from "@/lib/gns/gains-price-precision";
 import { sendGnsCloseTradeMarket } from "@/lib/gns/send-close-trade-market";
+import type { GainsApiChain } from "@/types/gains-api";
 
 export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
-  if (!isFaucetChainConfigured()) {
-    return NextResponse.json(
-      { error: "FAUCET_RPC_URL and FAUCET_CHAIN_ID must be set (same chain as Gains)." },
-      { status: 500 },
-    );
-  }
-
   const session = await getSessionFromRequest(request);
   if (!session) {
     return NextResponse.json({ error: "Not signed in." }, { status: 401 });
@@ -31,6 +29,16 @@ export async function POST(request: NextRequest) {
   }
 
   const b = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
+
+  const gainsChainRaw = b.gainsChain;
+  let gainsChain: GainsApiChain = "Testnet";
+  if (
+    gainsChainRaw === "Testnet" ||
+    gainsChainRaw === "Arbitrum" ||
+    gainsChainRaw === "Base"
+  ) {
+    gainsChain = gainsChainRaw;
+  }
 
   const tradeIndexRaw = b.tradeIndex;
   const priceRaw = b.currentPriceUsdDecimaled;
@@ -98,6 +106,23 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const surface = gainsUiChainToExecSurface(gainsChain);
+  if (!isGainsExecSurfaceConfigured(surface)) {
+    const msg =
+      surface === "arbitrum"
+        ? "Arbitrum non configuré (ARBITRUM_RPC_URL, etc.)."
+        : "Testnet / faucet non configuré (FAUCET_RPC_URL, FAUCET_CHAIN_ID).";
+    return NextResponse.json({ error: msg }, { status: 500 });
+  }
+
+  let execRt: ReturnType<typeof getGainsExecRuntime>;
+  try {
+    execRt = getGainsExecRuntime(surface);
+  } catch (e) {
+    const m = e instanceof Error ? e.message : "Invalid chain configuration.";
+    return NextResponse.json({ error: m }, { status: 500 });
+  }
+
   try {
     const evmClient = await authenticatedEvmClient({
       authToken,
@@ -109,6 +134,8 @@ export async function POST(request: NextRequest) {
       walletAddress,
       tradeIndex,
       expectedPriceUint64,
+      chain: execRt.chain,
+      diamond: execRt.diamond,
     });
 
     return NextResponse.json({

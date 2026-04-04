@@ -7,11 +7,12 @@ import { authenticatedEvmClient } from "@/lib/dynamic/evm-client"
 import { parseDuelTradeConfig, parseReadyState } from "@/lib/db/duel-ready"
 import { findDuelById, markParticipantOpenTradeRecorded } from "@/lib/db/duels"
 import { findUserById } from "@/lib/db/users"
-import { getFaucetChain, isFaucetChainConfigured } from "@/lib/evm/faucet-chain"
 import {
-  approveCollateralIfNeeded,
-  getGnsCollateralTokenAddress,
-} from "@/lib/gns/approve-collateral-if-needed"
+  gainsUiChainToExecSurface,
+  getGainsExecRuntime,
+  isGainsExecSurfaceConfigured,
+} from "@/lib/gns/gains-exec-context"
+import { approveCollateralIfNeeded } from "@/lib/gns/approve-collateral-if-needed"
 import { buildGnsTradeFromDuelConfig } from "@/lib/gns/build-duel-trade"
 import { serializeTradeForJson } from "@/lib/gns/serialize-trade-for-json"
 import { sendGnsOpenTrade } from "@/lib/gns/send-open-trade"
@@ -27,13 +28,6 @@ export async function POST(
   request: NextRequest,
   context: { params: Promise<{ id: string }> },
 ) {
-  if (!isFaucetChainConfigured()) {
-    return NextResponse.json(
-      { error: "FAUCET_RPC_URL and FAUCET_CHAIN_ID are required." },
-      { status: 500 },
-    )
-  }
-
   const { id: duelId } = await context.params
   if (!UUID_RE.test(duelId)) {
     return NextResponse.json({ error: "Invalid duel id." }, { status: 400 })
@@ -112,16 +106,6 @@ export async function POST(
     )
   }
 
-  let expectedCollateral: `0x${string}`
-  try {
-    expectedCollateral = getGnsCollateralTokenAddress()
-  } catch {
-    return NextResponse.json(
-      { error: "GNS_COLLATERAL_TOKEN_ADDRESS is missing." },
-      { status: 500 },
-    )
-  }
-
   let collateralWei: bigint
   try {
     collateralWei = parseUnits(duel.stake_usdc, USDC_DECIMALS)
@@ -141,16 +125,32 @@ export async function POST(
     )
   }
 
-  const chain = getFaucetChain()
+  const execSurface = gainsUiChainToExecSurface(sideConfig.gainsChain)
+  if (!isGainsExecSurfaceConfigured(execSurface)) {
+    const msg =
+      execSurface === "arbitrum"
+        ? "Arbitrum One non configuré : définis ARBITRUM_RPC_URL (optionnel ARBITRUM_CHAIN_ID=42161, GNS_ARBITRUM_DIAMOND_ADDRESS, GNS_ARBITRUM_COLLATERAL_TOKEN_ADDRESS)."
+        : "FAUCET_RPC_URL et FAUCET_CHAIN_ID sont requis pour le testnet."
+    return NextResponse.json({ error: msg }, { status: 500 })
+  }
+
+  let execRt: ReturnType<typeof getGainsExecRuntime>
+  try {
+    execRt = getGainsExecRuntime(execSurface)
+  } catch (e) {
+    const m = e instanceof Error ? e.message : "Invalid chain configuration."
+    return NextResponse.json({ error: m }, { status: 500 })
+  }
+
   const publicClient = createPublicClient({
-    chain,
-    transport: http(chain.rpcUrls.default.http[0]),
+    chain: execRt.chain,
+    transport: http(execRt.chain.rpcUrls.default.http[0]),
   })
 
   let onChainBalance: bigint
   try {
     onChainBalance = await publicClient.readContract({
-      address: expectedCollateral,
+      address: execRt.collateral,
       abi: erc20Abi,
       functionName: "balanceOf",
       args: [walletAddress],
@@ -176,6 +176,7 @@ export async function POST(
       walletAddress,
       collateralWei,
       sideConfig,
+      { collateralIndex: execRt.collateralIndex },
     )
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Invalid trade."
@@ -194,12 +195,17 @@ export async function POST(
       evmClient,
       walletAddress,
       minAmount: minAllowance,
+      rpcChain: execRt.chain,
+      collateralToken: execRt.collateral,
+      spender: execRt.diamond,
     })
 
     const txHash = await sendGnsOpenTrade({
       evmClient,
       walletAddress,
       trade,
+      chain: execRt.chain,
+      diamond: execRt.diamond,
     })
 
     try {

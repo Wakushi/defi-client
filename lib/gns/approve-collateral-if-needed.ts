@@ -6,6 +6,7 @@ import {
   http,
   maxUint256,
   type Address,
+  type Chain,
 } from "viem";
 
 import { erc20Abi } from "@/constants/erc20";
@@ -43,11 +44,15 @@ export async function approveCollateralIfNeeded(params: {
   evmClient: DynamicEvmWalletClient;
   walletAddress: Address;
   minAmount: bigint;
+  /** Surcharge pour Arbitrum One / autre RPC que le faucet testnet. */
+  rpcChain?: Chain;
+  collateralToken?: Address;
+  spender?: Address;
 }): Promise<`0x${string}` | undefined> {
-  const token = getGnsCollateralTokenAddress();
-  const spender = getGnsDiamondAddress();
+  const token = params.collateralToken ?? getGnsCollateralTokenAddress();
+  const spender = params.spender ?? getGnsDiamondAddress();
 
-  const chain = getFaucetChain();
+  const chain = params.rpcChain ?? getFaucetChain();
   const publicClient = createPublicClient({
     chain,
     transport: http(chain.rpcUrls.default.http[0]),
@@ -75,6 +80,7 @@ export async function approveCollateralIfNeeded(params: {
     walletAddress: params.walletAddress,
     to: token,
     data,
+    chain,
   });
 
   await publicClient.waitForTransactionReceipt({ hash });
