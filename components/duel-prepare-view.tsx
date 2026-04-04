@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { GainsPairPicker } from "@/components/gains-pair-picker";
+import { useGainsRealtime } from "@/components/gains-realtime-context";
 import {
   GameHudBar,
   GameLogo,
@@ -18,6 +20,7 @@ import {
   gameSubtitle,
   gameTitle,
 } from "@/components/game-ui";
+import type { GainsApiChain, GainsTradingPair } from "@/types/gains-api";
 import type { DuelTradeSideConfig } from "@/types/duel-trade";
 
 const POLL_MS = 1000;
@@ -67,8 +70,18 @@ export function DuelPrepareView() {
   const [nowTick, setNowTick] = useState(() => Date.now());
 
   const [pairIndex, setPairIndex] = useState(0);
+  const [gainsChain, setGainsChain] = useState<GainsApiChain>("Testnet");
+  const [selectedPairLabel, setSelectedPairLabel] = useState("");
   const [leverageX, setLeverageX] = useState(10);
   const [long, setLong] = useState(true);
+
+  const {
+    subscribePositions,
+    positions,
+    connectionState,
+    lastWsError,
+    walletAddress: gainsWallet,
+  } = useGainsRealtime();
   const [readyLoading, setReadyLoading] = useState(false);
   const [readyError, setReadyError] = useState<string | null>(null);
 
@@ -104,6 +117,7 @@ export function DuelPrepareView() {
         setPairIndex(data.myTradeConfig.pairIndex);
         setLeverageX(data.myTradeConfig.leverageX);
         setLong(data.myTradeConfig.long);
+        setSelectedPairLabel(`Pair #${data.myTradeConfig.pairIndex}`);
       }
 
       // Same target instant for both clients: server `readyBothAt` + countdown, not next poll/React tick.
@@ -184,6 +198,11 @@ export function DuelPrepareView() {
     return () => clearInterval(id);
   }, [duel?.bothReady, duel?.readyBothAt]);
 
+  useEffect(() => {
+    if (!duel?.bothReady || !participant) return;
+    subscribePositions(gainsChain);
+  }, [duel?.bothReady, participant, gainsChain, subscribePositions]);
+
   const cd = useMemo(() => {
     if (!duel?.bothReady || !duel.readyBothAt) return null;
     return countdownNumber(duel.readyBothAt, nowTick);
@@ -229,6 +248,7 @@ export function DuelPrepareView() {
 
   const onExecute = useCallback(async () => {
     if (!duelId || !password.trim()) return;
+    subscribePositions(gainsChain);
     setExecError(null);
     setExecLoading(true);
     try {
@@ -252,7 +272,7 @@ export function DuelPrepareView() {
     } finally {
       setExecLoading(false);
     }
-  }, [duelId, password]);
+  }, [duelId, password, gainsChain, subscribePositions]);
 
   onExecuteRef.current = onExecute;
 
@@ -381,6 +401,42 @@ export function DuelPrepareView() {
           </p>
         </div>
 
+        <div className={`${gamePanel} space-y-2 p-4 text-xs`}>
+          <p className={gameLabel}>Gains positions (WebSocket)</p>
+          <p className={gameMuted}>
+            Socket: {connectionState}
+            {gainsWallet ? (
+              <span className="text-[var(--game-text-muted)]"> · {gainsWallet.slice(0, 6)}…</span>
+            ) : (
+              <span className="text-[var(--game-amber)]"> · no wallet on session</span>
+            )}
+          </p>
+          {connectionState === "idle" && gainsWallet ? (
+            <p className={gameMuted}>
+              Set <code className="text-[var(--game-cyan)]">NEXT_PUBLIC_DUEL_DEFI_WS_URL</code> (e.g.{" "}
+              <code className="break-all text-[10px] text-[var(--game-text-muted)]">
+                ws://46.202.173.162:3001/ws/positions
+              </code>
+              ) to stream live positions.
+            </p>
+          ) : null}
+          {lastWsError ? (
+            <p className="text-[var(--game-danger)]">{lastWsError}</p>
+          ) : null}
+          {positions.length > 0 ? (
+            <ul className="max-h-36 space-y-1 overflow-y-auto font-[family-name:var(--font-share-tech)] text-[var(--game-text)]">
+              {positions.map((pos, i) => (
+                <li key={`${pos.pairIndex}-${i}`} className="border-b border-[var(--game-cyan-dim)]/40 py-1">
+                  Pair {pos.pairIndex} · {pos.long ? "long" : "short"} · {pos.leverage}× · entry{" "}
+                  {pos.openPrice} · PnL {pos.pnl} · liq {pos.liquidationPrice}
+                </li>
+              ))}
+            </ul>
+          ) : connectionState === "open" ? (
+            <p className={gameMuted}>Waiting for position ticks (subscribe sent for {gainsChain})…</p>
+          ) : null}
+        </div>
+
         {!duel.myReady ? (
           <div className={`${gamePanel} space-y-4 p-6`}>
             <h2 className="font-[family-name:var(--font-orbitron)] text-sm font-bold uppercase tracking-wider text-[var(--game-magenta)]">
@@ -397,17 +453,22 @@ export function DuelPrepareView() {
                 autoComplete="current-password"
               />
             </label>
-            <label className="block space-y-2">
-              <span className={gameLabel}>Pair index</span>
-              <input
-                type="number"
-                min={0}
-                max={65535}
-                value={pairIndex}
-                onChange={(e) => setPairIndex(Number.parseInt(e.target.value, 10) || 0)}
-                className={gameInput}
+            <div className="space-y-2">
+              <span className={gameLabel}>Trading pair</span>
+              <GainsPairPicker
+                chain={gainsChain}
+                onChainChange={(c) => {
+                  setGainsChain(c);
+                  setPairIndex(0);
+                  setSelectedPairLabel("");
+                }}
+                selectedPairIndex={pairIndex}
+                onSelectPair={(p: GainsTradingPair) => {
+                  setPairIndex(p.pairIndex);
+                  setSelectedPairLabel(p.name);
+                }}
               />
-            </label>
+            </div>
             <label className="block space-y-2">
               <span className={gameLabel}>Leverage (×)</span>
               <input
@@ -446,7 +507,8 @@ export function DuelPrepareView() {
               Ready locked in
             </p>
             <p className={`${gameMuted} mt-1`}>
-              Pair {pairIndex} · {leverageX}× · {long ? "Long" : "Short"} · password kept for auto-sign
+              {selectedPairLabel || `Pair #${pairIndex}`} · {gainsChain} · {leverageX}× ·{" "}
+              {long ? "Long" : "Short"} · password kept for auto-sign
             </p>
           </div>
         )}
