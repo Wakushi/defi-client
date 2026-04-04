@@ -29,6 +29,7 @@ type DuelApi = {
   createdAt: string;
   duelFull: boolean;
   viewer: { isCreator: boolean; isOpponent: boolean } | null;
+  viewerAccountPseudo?: string | null;
   playMode?: "friendly" | "duel";
   creatorChain?: string | null;
   opponentChain?: string | null;
@@ -624,6 +625,7 @@ export function DuelAcceptPanel({ duelId }: Props) {
       duel.opponentPseudo,
       duel.viewer,
       "?",
+      duel.viewerAccountPseudo ?? null,
     );
     return (
       <div className={`${gamePanel} border-[var(--game-magenta-dim)] p-6`}>

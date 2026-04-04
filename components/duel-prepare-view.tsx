@@ -81,6 +81,7 @@ type DuelPayload = {
   durationSeconds: number
   duelFull: boolean
   viewer: { isCreator: boolean; isOpponent: boolean } | null
+  viewerAccountPseudo?: string | null
   playMode?: "friendly" | "duel"
   creatorChain?: GainsApiChain | null
   opponentChain?: GainsApiChain | null
@@ -187,6 +188,8 @@ export function DuelPrepareView() {
     number | null
   >(null)
   const [leverageX, setLeverageX] = useState(10)
+  /** Saisie levier sans `type="number"` (pas de flèches) ; chiffres uniquement, clamp 1–500 au blur. */
+  const [leverageDraft, setLeverageDraft] = useState("10")
   const [long, setLong] = useState(true)
 
   const {
@@ -323,6 +326,7 @@ export function DuelPrepareView() {
       if (data.myTradeConfig) {
         setPairIndex(data.myTradeConfig.pairIndex)
         setLeverageX(data.myTradeConfig.leverageX)
+        setLeverageDraft(String(data.myTradeConfig.leverageX))
         setLong(data.myTradeConfig.long)
         setSelectedPairLabel(`Pair #${data.myTradeConfig.pairIndex}`)
         setSelectedReferencePrice(
@@ -564,6 +568,12 @@ export function DuelPrepareView() {
         }
       }
 
+      let lev = Number.parseInt(leverageDraft, 10)
+      if (!Number.isFinite(lev) || lev < 1) lev = 1
+      if (lev > 500) lev = 500
+      setLeverageX(lev)
+      setLeverageDraft(String(lev))
+
       // Now mark ready with trade config
       const res = await fetch(`/api/duels/${duelId}/trade-ready`, {
         method: "POST",
@@ -571,7 +581,7 @@ export function DuelPrepareView() {
         credentials: "include",
         body: JSON.stringify({
           pairIndex,
-          leverageX,
+          leverageX: lev,
           long,
           tradeType: 0,
           gainsChain,
@@ -731,6 +741,7 @@ export function DuelPrepareView() {
     duel.opponentPseudo,
     duel.viewer,
     "—",
+    duel.viewerAccountPseudo ?? null,
   )
 
   const myTradePseudo =
@@ -774,25 +785,43 @@ export function DuelPrepareView() {
         <div
           className={`${gamePanel} ${gamePanelTopAccent} space-y-3 p-6 text-sm`}
         >
-          <p className="font-[family-name:var(--font-share-tech)] text-[var(--game-cyan)]">
-            Ready status [{duel.readyState[0]}, {duel.readyState[1]}]{" "}
-            <span className="text-[var(--game-text-muted)]">
-              · creator, opponent
-            </span>
-          </p>
-          <p className={gameMuted}>
-            Once both are ready, your position opens with{" "}
-            <span className="font-semibold text-[var(--game-magenta)]">
-              auto-sign
-            </span>
-            . On WebSocket{" "}
-            <span className="font-semibold text-[var(--game-cyan)]">start</span>
-            , a fullscreen{" "}
-            <span className="font-semibold text-[var(--game-magenta)]">
-              3 · 2 · 1
-            </span>{" "}
-            countdown — live positions and the duel timer only appear after that.
-          </p>
+          <p className={gameLabel}>Ready</p>
+          <ul className="space-y-2">
+            <li className="flex flex-wrap items-baseline justify-between gap-2">
+              <span className="font-[family-name:var(--font-share-tech)] text-[var(--game-text)]">
+                {duel.creatorPseudo}
+              </span>
+              <span
+                className={
+                  duel.readyState[0] === 1
+                    ? "font-[family-name:var(--font-orbitron)] text-xs font-bold uppercase tracking-wider text-[var(--game-cyan)]"
+                    : "font-[family-name:var(--font-orbitron)] text-xs font-bold uppercase tracking-wider text-[var(--game-text-muted)]"
+                }
+              >
+                {duel.readyState[0] === 1 ? "Ready" : "Not ready"}
+              </span>
+            </li>
+            <li className="flex flex-wrap items-baseline justify-between gap-2">
+              <span className="font-[family-name:var(--font-share-tech)] text-[var(--game-text)]">
+                {duel.opponentPseudo ?? "Opponent"}
+              </span>
+              <span
+                className={
+                  duel.opponentPseudo == null
+                    ? "font-[family-name:var(--font-orbitron)] text-xs font-bold uppercase tracking-wider text-[var(--game-text-muted)]"
+                    : duel.readyState[1] === 1
+                      ? "font-[family-name:var(--font-orbitron)] text-xs font-bold uppercase tracking-wider text-[var(--game-cyan)]"
+                      : "font-[family-name:var(--font-orbitron)] text-xs font-bold uppercase tracking-wider text-[var(--game-text-muted)]"
+                }
+              >
+                {duel.opponentPseudo == null
+                  ? "—"
+                  : duel.readyState[1] === 1
+                    ? "Ready"
+                    : "Not ready"}
+              </span>
+            </li>
+          </ul>
         </div>
 
         {duel.bothReady ? (
@@ -1036,13 +1065,24 @@ export function DuelPrepareView() {
             <label className="block space-y-2">
               <span className={gameLabel}>Leverage (×)</span>
               <input
-                type="number"
-                min={1}
-                max={500}
-                value={leverageX}
-                onChange={(e) =>
-                  setLeverageX(Number.parseInt(e.target.value, 10) || 1)
-                }
+                type="text"
+                inputMode="numeric"
+                autoComplete="off"
+                value={leverageDraft}
+                onChange={(e) => {
+                  const d = e.target.value.replace(/\D/g, "").slice(0, 3)
+                  setLeverageDraft(d)
+                  if (d === "") return
+                  const n = Number.parseInt(d, 10)
+                  if (Number.isFinite(n) && n >= 1 && n <= 500) setLeverageX(n)
+                }}
+                onBlur={() => {
+                  let n = Number.parseInt(leverageDraft, 10)
+                  if (!Number.isFinite(n) || n < 1) n = 1
+                  if (n > 500) n = 500
+                  setLeverageX(n)
+                  setLeverageDraft(String(n))
+                }}
                 className={gameInput}
               />
             </label>

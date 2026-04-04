@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 
 import { getDuelDefiApiBaseUrl } from "@/lib/duel-defi/api-base";
+import { normalizeTradingPair } from "@/lib/gains/normalize-trading-pair";
 import type { GainsApiChain, GainsTradingPair } from "@/types/gains-api";
 
 export const runtime = "nodejs";
@@ -39,7 +40,13 @@ export async function GET(request: NextRequest) {
     if (!Array.isArray(data)) {
       return NextResponse.json({ error: "Invalid pairs payload." }, { status: 502 });
     }
-    return NextResponse.json(data as GainsTradingPair[]);
+    const normalized: GainsTradingPair[] = [];
+    for (const item of data) {
+      if (!item || typeof item !== "object") continue;
+      const row = normalizeTradingPair(item as Record<string, unknown>);
+      if (row) normalized.push(row);
+    }
+    return NextResponse.json(normalized);
   } catch (e) {
     console.error("[gains/pairs]", e);
     return NextResponse.json({ error: "Failed to fetch pairs." }, { status: 502 });

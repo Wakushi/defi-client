@@ -100,32 +100,58 @@ export function GainsPairPicker({
         {!loading && pairs.length === 0 && !error ? (
           <p className={`${gameMuted} p-4 text-xs`}>No pairs.</p>
         ) : null}
-        <table className="w-full text-left text-xs">
-          <thead className="sticky top-0 bg-[rgba(4,2,12,0.95)] text-[var(--game-text-muted)]">
+        <table className="w-full table-fixed border-collapse text-left text-xs">
+          <colgroup>
+            <col className="w-[50%]" />
+            <col className="w-[28%]" />
+            <col className="w-[22%]" />
+          </colgroup>
+          <thead className="sticky top-0 z-[1] bg-[rgba(4,2,12,0.95)] text-[var(--game-text-muted)]">
             <tr>
-              <th className="px-2 py-2 font-[family-name:var(--font-orbitron)] uppercase tracking-wider">
+              <th className="px-2 py-2 text-left font-[family-name:var(--font-orbitron)] uppercase tracking-wider">
                 Pair
               </th>
-              <th className="px-2 py-2">Price</th>
-              <th className="px-2 py-2">24h</th>
+              <th className="px-2 py-2 text-right font-[family-name:var(--font-orbitron)] uppercase tracking-wider">
+                Price
+              </th>
+              <th className="px-2 py-2 text-right font-[family-name:var(--font-orbitron)] uppercase tracking-wider">
+                24h
+              </th>
             </tr>
           </thead>
           <tbody>
             {pairs.map((p) => {
               const selected = p.pairIndex === selectedPairIndex;
+              const pct = p.percentChange;
+              const pctLabel = Number.isFinite(pct)
+                ? `${pct >= 0 ? "+" : ""}${pct.toFixed(2)}%`
+                : "—";
               return (
-                <tr key={`${p.pairIndex}-${p.name}`}>
-                  <td colSpan={3} className="p-0">
-                    <button
-                      type="button"
-                      disabled={disabled}
-                      onClick={() => onSelectPair(p)}
-                      className={`flex w-full items-center gap-2 px-2 py-2 text-left transition enabled:hover:bg-[rgba(65,245,240,0.08)] disabled:opacity-50 ${
-                        selected
-                          ? "bg-[rgba(65,245,240,0.12)] ring-1 ring-[var(--game-cyan)]/40"
-                          : ""
-                      }`}
-                    >
+                <tr
+                  key={`${p.pairIndex}-${p.name}`}
+                  role="button"
+                  tabIndex={disabled ? -1 : 0}
+                  aria-disabled={disabled}
+                  onClick={() => {
+                    if (!disabled) onSelectPair(p);
+                  }}
+                  onKeyDown={(e) => {
+                    if (disabled) return;
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      onSelectPair(p);
+                    }
+                  }}
+                  className={`border-t border-[var(--game-cyan-dim)]/40 transition first:border-t-0 ${
+                    disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer hover:bg-[rgba(65,245,240,0.06)]"
+                  } ${
+                    selected
+                      ? "bg-[rgba(65,245,240,0.12)] ring-1 ring-inset ring-[var(--game-cyan)]/40"
+                      : ""
+                  }`}
+                >
+                  <td className="min-w-0 px-2 py-2 align-middle">
+                    <div className="flex min-w-0 items-center gap-2">
                       {p.logo ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
@@ -140,25 +166,27 @@ export function GainsPairPicker({
                           {p.from.slice(0, 2)}
                         </span>
                       )}
-                      <div className="min-w-0 flex-1">
+                      <div className="min-w-0">
                         <p className="truncate font-semibold text-[var(--game-text)]">{p.name}</p>
                         <p className="truncate text-[10px] text-[var(--game-text-muted)]">
                           #{p.pairIndex} · {p.from}/{p.to}
                         </p>
                       </div>
-                      <div className="shrink-0 text-right font-[family-name:var(--font-share-tech)] tabular-nums text-[var(--game-cyan)]">
-                        {Number.isFinite(p.price) ? p.price.toLocaleString() : "—"}
-                      </div>
-                      <div
-                        className={`w-14 shrink-0 text-right tabular-nums ${
-                          p.percentChange >= 0 ? "text-emerald-400" : "text-[var(--game-danger)]"
-                        }`}
-                      >
-                        {Number.isFinite(p.percentChange)
-                          ? `${(p.percentChange * 100).toFixed(2)}%`
-                          : "—"}
-                      </div>
-                    </button>
+                    </div>
+                  </td>
+                  <td className="px-2 py-2 align-middle text-right font-[family-name:var(--font-share-tech)] tabular-nums text-[var(--game-cyan)]">
+                    {Number.isFinite(p.price) && p.price > 0 ? p.price.toLocaleString() : "—"}
+                  </td>
+                  <td
+                    className={`px-2 py-2 align-middle text-right tabular-nums ${
+                      !Number.isFinite(pct)
+                        ? "text-[var(--game-text-muted)]"
+                        : pct >= 0
+                          ? "text-emerald-400"
+                          : "text-[var(--game-danger)]"
+                    }`}
+                  >
+                    {pctLabel}
                   </td>
                 </tr>
               );

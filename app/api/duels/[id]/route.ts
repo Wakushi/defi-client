@@ -30,10 +30,12 @@ export async function GET(
   }
 
   let viewer: { isCreator: boolean; isOpponent: boolean } | null = null
+  let viewerAccountPseudo: string | null = null
   const session = await getSessionFromRequest(request)
   if (session) {
     const user = await findUserById(session.userId)
     if (user && user.pseudo === session.pseudo) {
+      viewerAccountPseudo = user.pseudo
       viewer = {
         isCreator: user.id === duel.creator_id,
         isOpponent: duel.opponent_id !== null && user.id === duel.opponent_id,
@@ -104,6 +106,7 @@ export async function GET(
     createdAt: duel.created_at.toISOString(),
     duelFull: duel.opponent_id !== null,
     viewer,
+    viewerAccountPseudo,
     readyState,
     readyBothAt,
     bothReady: readyState[0] === 1 && readyState[1] === 1,

@@ -2,11 +2,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { DuelAcceptPanel } from "@/components/duel-accept-panel";
+import { DuelLobbyVsBanner } from "@/components/duel-lobby-vs-banner";
 import {
   GameHudBar,
   GameLogo,
   GameStatPill,
-  GameVsBanner,
   gameLink,
   gameMuted,
   gameSubtitle,
@@ -14,12 +14,11 @@ import {
 } from "@/components/game-ui";
 import { getSessionFromCookies } from "@/lib/auth/session";
 import { findDuelWithPseudos } from "@/lib/db/duels";
-import {
-  normalizeDuelPlayMode,
-  parseStoredGainsChainOptional,
-} from "@/lib/duel/play-mode";
+import { normalizeDuelPlayMode } from "@/lib/duel/play-mode";
 import { duelVsBannerForViewer } from "@/lib/duel/viewer-vs-order";
 import { findUserById } from "@/lib/db/users";
+
+export const dynamic = "force-dynamic";
 
 type Props = {
   params: Promise<{ id: string }>;
@@ -51,10 +50,12 @@ export default async function DuelLobbyPage({ params }: Props) {
   const stakeLabel = formatUsdcDisplay(duel.stake_usdc);
 
   let viewer: { isCreator: boolean; isOpponent: boolean } | null = null;
+  let viewerAccountPseudo: string | null = null;
   const session = await getSessionFromCookies();
   if (session) {
     const user = await findUserById(session.userId);
     if (user && user.pseudo === session.pseudo) {
+      viewerAccountPseudo = user.pseudo;
       viewer = {
         isCreator: user.id === duel.creator_id,
         isOpponent: duel.opponent_id !== null && user.id === duel.opponent_id,
@@ -63,14 +64,13 @@ export default async function DuelLobbyPage({ params }: Props) {
   }
 
   const duelPlayMode = normalizeDuelPlayMode(duel.play_mode);
-  const cCh = parseStoredGainsChainOptional(duel.creator_chain);
-  const oCh = parseStoredGainsChainOptional(duel.opponent_chain);
 
   const vs = duelVsBannerForViewer(
     duel.creator_pseudo,
     duel.opponent_pseudo,
     viewer,
     "Waiting…",
+    viewerAccountPseudo,
   );
 
   return (
@@ -91,15 +91,10 @@ export default async function DuelLobbyPage({ params }: Props) {
           <p className={`${gameMuted} font-[family-name:var(--font-share-tech)] text-xs`}>{duel.id}</p>
         </div>
 
-        <GameVsBanner
-          left={vs.left}
-          right={vs.right}
-          leftTag={vs.leftTag}
-          rightTag={vs.rightTag}
-        />
+        <DuelLobbyVsBanner duelId={duel.id} initial={vs} />
 
         <div
-          className={`rounded-sm border px-4 py-3 text-xs ${
+          className={`rounded-sm border px-4 py-3 ${
             duelPlayMode === "duel"
               ? "border-[var(--game-magenta)]/50 bg-[rgba(255,61,154,0.08)] text-[var(--game-text)]"
               : "border-[var(--game-cyan-dim)]/60 bg-[rgba(65,245,240,0.06)] text-[var(--game-text-muted)]"
@@ -107,24 +102,6 @@ export default async function DuelLobbyPage({ params }: Props) {
         >
           <p className="font-[family-name:var(--font-orbitron)] text-[10px] font-bold uppercase tracking-[0.2em]">
             {duelPlayMode === "duel" ? "Duel mode" : "Friendly mode"}
-          </p>
-          <p className="mt-1 font-[family-name:var(--font-share-tech)] leading-relaxed">
-            {duelPlayMode === "duel" ? (
-              <>
-                Mainnet (Arbitrum / Base) — chains chosen at prep: host{" "}
-                <span className="text-[var(--game-cyan)]">{cCh ?? "—"}</span>
-                {" · "}
-                guest: <span className="text-[var(--game-cyan)]">{oCh ?? "—"}</span>
-              </>
-            ) : (
-              <>
-                Testnet (faucet) — host:{" "}
-                <span className="text-[var(--game-cyan)]">{cCh ?? "Testnet"}</span>
-                {" · "}
-                guest:{" "}
-                <span className="text-[var(--game-cyan)]">{oCh ?? "Testnet"}</span>
-              </>
-            )}
           </p>
         </div>
 
