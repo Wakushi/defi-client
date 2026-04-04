@@ -78,6 +78,11 @@ type GainsRealtimeContextValue = {
   /** Résultat PnL % (dernier tick à ~1 s + derniers % connus si fermeture anticipée). `null` hors fin de duel. */
   duelPnlOutcome: GainsDuelPnlOutcome | null
   /**
+   * Horodatage local (`Date.now()`) du dernier `{ event: "start", data: { duelId } }` reçu pour l’abonnement courant.
+   * Sert à lancer le compte à rebours 3-2-1 côté UI après « les deux prêts ».
+   */
+  duelStartSignalAt: number | null
+  /**
    * À appeler une fois quand `duelTimerEnded` passe à true : renvoie une copie des **mes** positions
    * issues du dernier message à **1 s** restantes (souvent le dernier avec prix/index utiles), sinon du tick 0.
    */
@@ -99,6 +104,7 @@ const defaultValue: GainsRealtimeContextValue = {
   duelRemainingSeconds: null,
   duelTimerEnded: false,
   duelPnlOutcome: null,
+  duelStartSignalAt: null,
   takeDuelEndCloseTargets: () => null,
   subscribePositions: () => {},
   unsubscribePositions: () => {},
@@ -148,6 +154,7 @@ export function GainsRealtimeProvider({
   const [duelPnlOutcome, setDuelPnlOutcome] = useState<GainsDuelPnlOutcome | null>(
     null,
   )
+  const [duelStartSignalAt, setDuelStartSignalAt] = useState<number | null>(null)
 
   /** Legacy : même référence que mes positions pour l’historique combiné affiché ailleurs. */
   const [legacyPnlHistoryByKey, setLegacyPnlHistoryByKey] = useState(
@@ -200,6 +207,7 @@ export function GainsRealtimeProvider({
     setLegacyPnlHistoryByKey(new Map())
     setDuelRemainingSeconds(null)
     setDuelTimerEnded(false)
+    setDuelStartSignalAt(null)
   }, [])
 
   const applyDuelSnapshot = useCallback(
@@ -318,6 +326,7 @@ export function GainsRealtimeProvider({
       lastMyScoreRef.current = null
       lastOpponentScoreRef.current = null
       scoresAtOneSecondRef.current = null
+      setDuelStartSignalAt(null)
       setDuelPnlOutcome(null)
       setMyPositions(batch)
       setOpponentPositions([])
@@ -464,6 +473,33 @@ export function GainsRealtimeProvider({
               applyLegacyPositionsArray(batch)
               return
             }
+          }
+
+          if (event === "start") {
+            const cur = subscribedDuelIdRef.current
+            if (!cur) {
+              console.log(LOG, "socket: start ignored — no active duel subscription")
+              return
+            }
+            const d =
+              data && typeof data === "object"
+                ? (data as Record<string, unknown>)
+                : null
+            const id =
+              d && typeof d.duelId === "string" ? d.duelId.trim() : ""
+            if (id && id !== cur) {
+              console.log(LOG, "socket: start ignored — duelId mismatch", {
+                got: id,
+                subscribed: cur,
+              })
+              return
+            }
+            console.log(LOG, "socket: duel start signal", {
+              duelId: cur,
+              message: d && typeof d.message === "string" ? d.message : undefined,
+            })
+            setDuelStartSignalAt(Date.now())
+            return
           }
 
           if (event === "error") {
@@ -623,6 +659,7 @@ export function GainsRealtimeProvider({
       duelRemainingSeconds,
       duelTimerEnded,
       duelPnlOutcome,
+      duelStartSignalAt,
       takeDuelEndCloseTargets,
       subscribePositions,
       unsubscribePositions,
@@ -639,6 +676,7 @@ export function GainsRealtimeProvider({
       duelRemainingSeconds,
       duelTimerEnded,
       duelPnlOutcome,
+      duelStartSignalAt,
       takeDuelEndCloseTargets,
       subscribePositions,
       unsubscribePositions,

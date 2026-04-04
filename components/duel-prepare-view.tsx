@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { GainsLivePositionsPanel } from "@/components/gains-live-positions-panel";
 import { GainsPairPicker } from "@/components/gains-pair-picker";
@@ -92,16 +92,6 @@ function formatOutcomeUsdc(n: number | null): string {
   return `${s}${formatUsdc(String(n))} USDC`;
 }
 
-function countdownNumber(readyBothAtIso: string | null, nowMs: number): number | null {
-  if (!readyBothAtIso) return null;
-  const t0 = new Date(readyBothAtIso).getTime();
-  const elapsed = Math.max(0, nowMs - t0);
-  if (elapsed >= COUNTDOWN_TOTAL_MS) return null;
-  const sec = Math.floor(elapsed / 1000);
-  const n = 3 - sec;
-  return n >= 1 ? n : 1;
-}
-
 export function DuelPrepareView() {
   const params = useParams();
   const duelId = typeof params.id === "string" ? params.id : "";
@@ -130,6 +120,7 @@ export function DuelPrepareView() {
     duelRemainingSeconds,
     duelTimerEnded,
     duelPnlOutcome,
+    duelStartSignalAt,
     takeDuelEndCloseTargets,
     connectionState,
     lastWsError,
@@ -200,10 +191,6 @@ export function DuelPrepareView() {
   const autoSignStartedRef = useRef(false);
   const txHashRef = useRef(txHash);
   const onExecuteRef = useRef<() => Promise<void>>(async () => {});
-  const scheduleSignTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  /** Avoid rescheduling the same `readyBothAt` on every poll. */
-  const scheduledForReadyBothAtRef = useRef<string | null>(null);
-
   txHashRef.current = txHash;
 
   const loadDuel = useCallback(async () => {
@@ -230,36 +217,6 @@ export function DuelPrepareView() {
             : null,
         );
       }
-
-      // Same target instant for both clients: server `readyBothAt` + countdown, not next poll/React tick.
-      const v = data.viewer;
-      const canSign = Boolean(v && (v.isCreator || v.isOpponent));
-      const anchor = data.readyBothAt;
-      const alreadyScheduledForAnchor =
-        anchor != null &&
-        scheduledForReadyBothAtRef.current === anchor &&
-        (scheduleSignTimeoutRef.current !== null || autoSignStartedRef.current);
-      if (
-        data.bothReady &&
-        anchor &&
-        canSign &&
-        !txHashRef.current &&
-        !alreadyScheduledForAnchor
-      ) {
-        scheduledForReadyBothAtRef.current = anchor;
-        if (scheduleSignTimeoutRef.current) {
-          clearTimeout(scheduleSignTimeoutRef.current);
-          scheduleSignTimeoutRef.current = null;
-        }
-        const fireAt = new Date(anchor).getTime() + COUNTDOWN_TOTAL_MS;
-        const delay = Math.max(0, fireAt - Date.now());
-        scheduleSignTimeoutRef.current = setTimeout(() => {
-          scheduleSignTimeoutRef.current = null;
-          if (txHashRef.current || autoSignStartedRef.current) return;
-          autoSignStartedRef.current = true;
-          void onExecuteRef.current();
-        }, delay);
-      }
     } catch {
       setDuel(null);
       setLoadError("Network error.");
@@ -273,21 +230,7 @@ export function DuelPrepareView() {
   }, [loadDuel]);
 
   useEffect(() => {
-    return () => {
-      if (scheduleSignTimeoutRef.current) {
-        clearTimeout(scheduleSignTimeoutRef.current);
-        scheduleSignTimeoutRef.current = null;
-      }
-    };
-  }, []);
-
-  useEffect(() => {
-    scheduledForReadyBothAtRef.current = null;
     autoSignStartedRef.current = false;
-    if (scheduleSignTimeoutRef.current) {
-      clearTimeout(scheduleSignTimeoutRef.current);
-      scheduleSignTimeoutRef.current = null;
-    }
   }, [duelId]);
 
   const participant =
@@ -306,27 +249,49 @@ export function DuelPrepareView() {
   }, [shouldPollDuel, loadDuel]);
 
   useEffect(() => {
-    if (!duel?.bothReady || !duel.readyBothAt) return;
-    const t0 = new Date(duel.readyBothAt).getTime();
-    if (Date.now() - t0 >= COUNTDOWN_TOTAL_MS) return;
+    if (duelStartSignalAt != null) setNowTick(Date.now());
+  }, [duelStartSignalAt]);
+
+  /** Rafraîchit l’horloge pendant le 3-2-1 après l’event WebSocket `start`. */
+  useEffect(() => {
+    if (!duel?.bothReady || duelStartSignalAt == null || txHash) return;
+    const elapsed = Date.now() - duelStartSignalAt;
+    if (elapsed >= COUNTDOWN_TOTAL_MS) return;
     const id = setInterval(() => setNowTick(Date.now()), 100);
     return () => clearInterval(id);
-  }, [duel?.bothReady, duel?.readyBothAt]);
+  }, [duel?.bothReady, duelStartSignalAt, txHash]);
 
   useEffect(() => {
     if (!duel?.bothReady || !participant || !duelId) return;
     subscribePositions(duelId);
   }, [duel?.bothReady, participant, duelId, subscribePositions]);
 
-  const cd = useMemo(() => {
-    if (!duel?.bothReady || !duel.readyBothAt) return null;
-    return countdownNumber(duel.readyBothAt, nowTick);
-  }, [duel?.bothReady, duel?.readyBothAt, nowTick]);
+  const prepElapsed =
+    duel?.bothReady === true && duelStartSignalAt != null
+      ? Math.max(0, nowTick - duelStartSignalAt)
+      : 0;
 
-  const countdownFinished = useMemo(() => {
-    if (!duel?.bothReady || !duel.readyBothAt) return false;
-    return nowTick - new Date(duel.readyBothAt).getTime() >= COUNTDOWN_TOTAL_MS;
-  }, [duel?.bothReady, duel?.readyBothAt, nowTick]);
+  const prepOverlayNum =
+    duel?.bothReady === true &&
+    duelStartSignalAt != null &&
+    prepElapsed < COUNTDOWN_TOTAL_MS
+      ? Math.max(1, 3 - Math.floor(prepElapsed / 1000))
+      : null;
+
+  const prepCountdownDone = Boolean(
+    duel?.bothReady === true &&
+      duelStartSignalAt != null &&
+      prepElapsed >= COUNTDOWN_TOTAL_MS,
+  );
+
+  const waitingWsStart =
+    duel?.bothReady === true && duelStartSignalAt == null && !txHash;
+
+  useLayoutEffect(() => {
+    if (!duel?.bothReady || !prepCountdownDone || txHash || autoSignStartedRef.current) return;
+    autoSignStartedRef.current = true;
+    void onExecuteRef.current();
+  }, [duel?.bothReady, prepCountdownDone, txHash]);
 
   async function onMarkReady() {
     if (!duelId) return;
@@ -526,8 +491,9 @@ export function DuelPrepareView() {
             <span className="text-[var(--game-text-muted)]">· creator, opponent</span>
           </p>
           <p className={gameMuted}>
-            Configure your pair and mark ready. Countdown 3 → 1 puis{" "}
-            <span className="font-semibold text-[var(--game-magenta)]">signature auto</span>.
+            Quand les deux sont prêts, le serveur envoie{" "}
+            <span className="font-semibold text-[var(--game-cyan)]">start</span> sur le WebSocket, puis compte à
+            rebours <span className="font-semibold text-[var(--game-magenta)]">3 · 2 · 1</span> et signature auto.
           </p>
         </div>
 
@@ -789,19 +755,41 @@ export function DuelPrepareView() {
           </p>
         ) : null}
 
-        {duel.bothReady && cd !== null ? (
-          <div className="game-countdown-overlay fixed inset-0 z-50 flex flex-col items-center justify-center">
-            <p className="mb-6 font-[family-name:var(--font-orbitron)] text-[10px] font-black uppercase tracking-[0.5em] text-[var(--game-magenta)] [text-shadow:0_0_16px_rgba(255,61,154,0.6)]">
-              Engage
+        {waitingWsStart ? (
+          <div className="fixed inset-0 z-40 flex flex-col items-center justify-center bg-[rgba(4,2,12,0.88)] backdrop-blur-sm">
+            <div
+              className="mb-5 size-10 animate-spin rounded-full border-2 border-[var(--game-cyan-dim)] border-t-[var(--game-cyan)]"
+              aria-hidden
+            />
+            <p className="font-[family-name:var(--font-orbitron)] text-[10px] font-bold uppercase tracking-[0.35em] text-[var(--game-cyan)]">
+              En attente du signal serveur
             </p>
-            <p className="game-countdown-num tabular-nums">{cd}</p>
-            <p className="mt-8 font-[family-name:var(--font-orbitron)] text-[10px] font-bold uppercase tracking-[0.35em] text-[var(--game-text-muted)]">
-              Positions will open
+            <p className={`${gameMuted} mt-2 max-w-xs px-4 text-center text-[11px]`}>
+              Les deux joueurs sont prêts. Connexion WebSocket :{" "}
+              <span className="font-semibold text-[var(--game-text)]">{connectionState}</span>
+              {connectionState !== "open" ? (
+                <>
+                  {" "}
+                  — ouvre la préparation avec un wallet connecté pour t’abonner au duel.
+                </>
+              ) : null}
             </p>
           </div>
         ) : null}
 
-        {duel.bothReady && countdownFinished ? (
+        {duel.bothReady && prepOverlayNum !== null ? (
+          <div className="game-countdown-overlay fixed inset-0 z-50 flex flex-col items-center justify-center">
+            <p className="mb-6 font-[family-name:var(--font-orbitron)] text-[10px] font-black uppercase tracking-[0.5em] text-[var(--game-magenta)] [text-shadow:0_0_16px_rgba(255,61,154,0.6)]">
+              Engage
+            </p>
+            <p className="game-countdown-num tabular-nums">{prepOverlayNum}</p>
+            <p className="mt-8 font-[family-name:var(--font-orbitron)] text-[10px] font-bold uppercase tracking-[0.35em] text-[var(--game-text-muted)]">
+              Ouverture des positions
+            </p>
+          </div>
+        ) : null}
+
+        {duel.bothReady && prepCountdownDone ? (
           <div className={`${gamePanel} ${gamePanelTopAccent} space-y-4 p-6`}>
             <h2 className="font-[family-name:var(--font-orbitron)] text-sm font-bold uppercase text-[var(--game-amber)]">
               Trade launch
