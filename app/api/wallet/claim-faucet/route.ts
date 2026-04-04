@@ -15,19 +15,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   }
 
-  let password: string | undefined;
-  try {
-    const raw = await request.json();
-    if (raw && typeof raw === "object" && "password" in raw) {
-      const p = (raw as { password: unknown }).password;
-      if (typeof p === "string" && p.trim()) {
-        password = p;
-      }
-    }
-  } catch {
-    /* corps vide ok */
-  }
-
   if (!isGetFreeDaiConfigured()) {
     return NextResponse.json(
       {
@@ -65,7 +52,6 @@ export async function POST(request: NextRequest) {
     const { gasFundTxHash, faucetTxHash } = await claimTestUsdcForWallet({
       evmClient,
       walletAddress,
-      ...(password ? { password } : {}),
     });
 
     return NextResponse.json({
@@ -80,7 +66,7 @@ export async function POST(request: NextRequest) {
         error:
           e instanceof Error
             ? e.message
-            : "Échec du faucet (gas natif, RPC, ou mot de passe Dynamic si wallet chiffré).",
+            : "Échec du faucet (gas natif ou RPC).",
       },
       { status: 502 },
     );

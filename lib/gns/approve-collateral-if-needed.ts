@@ -42,7 +42,6 @@ export function getGnsDiamondAddress(): Address {
 export async function approveCollateralIfNeeded(params: {
   evmClient: DynamicEvmWalletClient;
   walletAddress: Address;
-  password?: string;
   minAmount: bigint;
 }): Promise<`0x${string}` | undefined> {
   const token = getGnsCollateralTokenAddress();
@@ -74,7 +73,6 @@ export async function approveCollateralIfNeeded(params: {
   const hash = await dynamicSignAndSendTransaction({
     evmClient: params.evmClient,
     walletAddress: params.walletAddress,
-    password: params.password,
     to: token,
     data,
   });

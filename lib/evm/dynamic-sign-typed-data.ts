@@ -4,12 +4,10 @@ import type { Address, SignTypedDataParameters } from "viem";
 export async function dynamicSignTypedData(params: {
   evmClient: DynamicEvmWalletClient;
   walletAddress: Address;
-  password?: string;
   typedData: SignTypedDataParameters;
 }): Promise<`0x${string}`> {
   return params.evmClient.signTypedData({
     accountAddress: params.walletAddress,
     typedData: params.typedData,
-    ...(params.password?.trim() ? { password: params.password } : {}),
   });
 }

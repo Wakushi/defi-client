@@ -4,7 +4,6 @@ import { useCallback, useId, useMemo, useState } from "react";
 
 import {
   gameBtnDanger,
-  gameInput,
   gameLabel,
   gameMuted,
   gamePanel,
@@ -283,8 +282,6 @@ export type GainsLivePositionsPanelProps = {
   gainsChain: GainsApiChain;
   /** UUID duel envoyé au WS `subscribe` (stream par match). */
   wsDuelId?: string;
-  /** Pour fermeture on-chain si le backup Dynamic est chiffré (wallet ancien). */
-  walletPassword?: string;
   /** Titre de la carte (colonne adversaire / moi). */
   panelTitle?: string;
   /** Masque fermeture marché et aide close (positions adversaire). */
@@ -307,7 +304,6 @@ export function GainsLivePositionsPanel({
   gainsWallet,
   gainsChain,
   wsDuelId = "",
-  walletPassword = "",
   panelTitle = "Gains positions (WebSocket)",
   readOnly = false,
   historyKeyForPosition = gainsPositionStreamKey,
@@ -315,12 +311,9 @@ export function GainsLivePositionsPanel({
   duelEnded = false,
   showConnectionMeta = true,
 }: GainsLivePositionsPanelProps) {
-  const [localClosePassword, setLocalClosePassword] = useState("");
   const [closingKey, setClosingKey] = useState<string | null>(null);
   const [closeTx, setCloseTx] = useState<string | null>(null);
   const [closeErr, setCloseErr] = useState<string | null>(null);
-
-  const signingPassword = walletPassword.trim() || localClosePassword.trim();
 
   const closePosition = useCallback(
     async (pos: GainsPositionUpdate) => {
@@ -341,7 +334,6 @@ export function GainsLivePositionsPanel({
           headers: { "Content-Type": "application/json" },
           credentials: "include",
           body: JSON.stringify({
-            ...(signingPassword ? { password: signingPassword } : {}),
             tradeIndex: pos.index ?? 0,
             currentPriceUsdDecimaled: mark,
           }),
@@ -360,7 +352,7 @@ export function GainsLivePositionsPanel({
         setClosingKey(null);
       }
     },
-    [signingPassword, historyKeyForPosition],
+    [historyKeyForPosition],
   );
 
   const cards = useMemo(() => {
@@ -407,26 +399,6 @@ export function GainsLivePositionsPanel({
         </p>
       ) : null}
       {lastWsError ? <p className="text-sm text-[var(--game-danger)]">{lastWsError}</p> : null}
-
-      {positions.length > 0 && !readOnly && !walletPassword.trim() ? (
-        <div className="space-y-2 rounded-sm border border-[var(--game-amber)]/35 bg-[rgba(255,200,74,0.06)] px-3 py-2">
-          <p className={`${gameMuted} text-[11px]`}>
-            Si la fermeture échoue (déchiffrement Dynamic), saisis le mot de passe wallet une fois ici ou dans le
-            champ du dessus.
-          </p>
-          <label className="block space-y-1">
-            <span className={`${gameLabel} !text-[9px]`}>Mot de passe Dynamic (secours)</span>
-            <input
-              type="password"
-              value={localClosePassword}
-              onChange={(e) => setLocalClosePassword(e.target.value)}
-              placeholder="Optionnel"
-              className={gameInput}
-              autoComplete="current-password"
-            />
-          </label>
-        </div>
-      ) : null}
 
       {positions.length > 0 && !readOnly ? (
         <>

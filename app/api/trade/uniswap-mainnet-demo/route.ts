@@ -96,9 +96,6 @@ export async function POST(request: NextRequest) {
 
   const direction = b.direction === "usdc_to_eth" ? "usdc_to_eth" : "eth_to_usdc";
 
-  const dynamicPassword =
-    typeof b.password === "string" && b.password.trim() ? b.password : undefined;
-
   const user = await findUserById(session.userId);
   if (!user || user.pseudo !== session.pseudo) {
     return NextResponse.json({ error: "Session invalide." }, { status: 401 });
@@ -155,7 +152,6 @@ export async function POST(request: NextRequest) {
       amountStr,
       walletAddress,
       evmClient,
-      ...(dynamicPassword ? { password: dynamicPassword } : {}),
       slippageTolerance: 0.5,
     });
 

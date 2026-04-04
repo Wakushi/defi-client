@@ -66,9 +66,7 @@ export function SignupForm({ onSuccess }: Props) {
         <p className={gameLabel}>New fighter</p>
         <h1 className={`${gameTitle} text-xl sm:text-2xl`}>Create account</h1>
         <p className={gameMuted}>
-          Pick a username and password for your account. New wallets are created without a Dynamic wallet password. If
-          your wallet was created with encryption (older accounts), use the optional Dynamic wallet field when trading
-          — usually the same password as below.
+          Pick a username and password for your account. A Dynamic wallet is created for you on sign-up.
         </p>
       </div>
 

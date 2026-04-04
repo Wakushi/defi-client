@@ -25,7 +25,6 @@ async function main() {
 
   const wallet = await evmClient.createWalletAccount({
     thresholdSignatureScheme: ThresholdSignatureScheme.TWO_OF_TWO,
-    password: requireEnv("WALLET_PASSWORD"),
     onError: (error: Error) => {
       console.error("Wallet creation error:", error);
     },
@@ -37,7 +36,6 @@ async function main() {
   const signature = await evmClient.signMessage({
     accountAddress: wallet.accountAddress,
     message: "Hello from Dynamic!",
-    password: requireEnv("WALLET_PASSWORD"),
   });
 
   console.log("Message signed:", signature);

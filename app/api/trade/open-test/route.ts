@@ -38,9 +38,6 @@ export async function POST(request: NextRequest) {
 
   const b = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
 
-  const dynamicPassword =
-    typeof b.password === "string" && b.password.trim() ? b.password : undefined;
-
   const collateralAmountRaw =
     typeof b.collateralAmountRaw === "string" ? b.collateralAmountRaw.trim() : "";
   const tokenAddressIn =
@@ -178,14 +175,12 @@ export async function POST(request: NextRequest) {
     const approveTxHash = await approveCollateralIfNeeded({
       evmClient,
       walletAddress,
-      ...(dynamicPassword ? { password: dynamicPassword } : {}),
       minAmount: minAllowance,
     });
 
     const txHash = await sendGnsOpenTrade({
       evmClient,
       walletAddress,
-      ...(dynamicPassword ? { password: dynamicPassword } : {}),
       trade,
     });
     return NextResponse.json({

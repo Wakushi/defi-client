@@ -32,9 +32,6 @@ export async function POST(request: NextRequest) {
 
   const b = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
 
-  const dynamicPassword =
-    typeof b.password === "string" && b.password.trim() ? b.password : undefined;
-
   const tradeIndexRaw = b.tradeIndex;
   const priceRaw = b.currentPriceUsdDecimaled;
 
@@ -110,7 +107,6 @@ export async function POST(request: NextRequest) {
     const txHash = await sendGnsCloseTradeMarket({
       evmClient,
       walletAddress,
-      ...(dynamicPassword ? { password: dynamicPassword } : {}),
       tradeIndex,
       expectedPriceUint64,
     });

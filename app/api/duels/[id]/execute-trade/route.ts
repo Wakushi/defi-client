@@ -44,19 +44,6 @@ export async function POST(
     return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   }
 
-  let dynamicPassword: string | undefined;
-  try {
-    const raw = await request.json();
-    if (raw && typeof raw === "object" && "password" in raw) {
-      const p = (raw as { password: unknown }).password;
-      if (typeof p === "string" && p.trim()) {
-        dynamicPassword = p;
-      }
-    }
-  } catch {
-    /* empty body ok */
-  }
-
   const user = await findUserById(session.userId);
   if (!user || user.pseudo !== session.pseudo) {
     return NextResponse.json({ error: "Invalid session." }, { status: 401 });
@@ -169,14 +156,12 @@ export async function POST(
     const approveTxHash = await approveCollateralIfNeeded({
       evmClient,
       walletAddress,
-      ...(dynamicPassword ? { password: dynamicPassword } : {}),
       minAmount: minAllowance,
     });
 
     const txHash = await sendGnsOpenTrade({
       evmClient,
       walletAddress,
-      ...(dynamicPassword ? { password: dynamicPassword } : {}),
       trade,
     });
 

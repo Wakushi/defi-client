@@ -35,7 +35,6 @@ export async function executeUniswapClassicSwapFlow(params: {
   amountStr: string;
   walletAddress: Address;
   evmClient: DynamicEvmWalletClient;
-  password?: string;
   slippageTolerance?: number;
 }): Promise<ClassicSwapFlowResult> {
   const slippage = params.slippageTolerance ?? 0.5;
@@ -61,7 +60,6 @@ export async function executeUniswapClassicSwapFlow(params: {
       out.cancelTxHash = await dynamicSignAndSendUniswapTx({
         evmClient: params.evmClient,
         walletAddress: params.walletAddress,
-        password: params.password,
         tx: approvalRes.cancel!,
         chain: params.chain,
       });
@@ -71,7 +69,6 @@ export async function executeUniswapClassicSwapFlow(params: {
       out.approvalTxHash = await dynamicSignAndSendUniswapTx({
         evmClient: params.evmClient,
         walletAddress: params.walletAddress,
-        password: params.password,
         tx: approvalRes.approval!,
         chain: params.chain,
       });
@@ -110,7 +107,6 @@ export async function executeUniswapClassicSwapFlow(params: {
     out.permitOnChainTxHash = await dynamicSignAndSendUniswapTx({
       evmClient: params.evmClient,
       walletAddress: params.walletAddress,
-      password: params.password,
       tx: quoteRes.permitTransaction!,
       chain: params.chain,
     });
@@ -122,7 +118,6 @@ export async function executeUniswapClassicSwapFlow(params: {
     signature = await dynamicSignTypedData({
       evmClient: params.evmClient,
       walletAddress: params.walletAddress,
-      password: params.password,
       typedData: typed,
     });
   }
@@ -148,7 +143,6 @@ export async function executeUniswapClassicSwapFlow(params: {
   out.swapTxHash = await dynamicSignAndSendUniswapTx({
     evmClient: params.evmClient,
     walletAddress: params.walletAddress,
-    password: params.password,
     tx: swapRes.swap,
     chain: params.chain,
   });

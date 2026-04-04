@@ -7,7 +7,6 @@ import { parseUnits } from "viem";
 import {
   gameBtnGhost,
   gameBtnPrimary,
-  gameInput,
   gameLabel,
   gameMuted,
   gamePanel,
@@ -69,7 +68,6 @@ export function DuelAcceptPanel({ duelId }: Props) {
   const [fundingNotice, setFundingNotice] = useState<string | null>(null);
   const [claimLoading, setClaimLoading] = useState(false);
   const [claimError, setClaimError] = useState<string | null>(null);
-  const [claimPassword, setClaimPassword] = useState("");
   const [confirmingUsdc, setConfirmingUsdc] = useState(false);
   /** Après polling : le RPC voit bien assez d’USDC pour la mise. */
   const [balanceCoversStake, setBalanceCoversStake] = useState(false);
@@ -254,15 +252,11 @@ export function DuelAcceptPanel({ duelId }: Props) {
     setBalanceCoversStake(false);
     setClaimLoading(true);
     try {
-      const body =
-        claimPassword.trim().length > 0
-          ? JSON.stringify({ password: claimPassword })
-          : JSON.stringify({});
       const r = await fetch("/api/wallet/claim-faucet", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body,
+        body: JSON.stringify({}),
       });
       const data = (await r.json()) as { error?: string };
       if (!r.ok) {
@@ -511,19 +505,6 @@ export function DuelAcceptPanel({ duelId }: Props) {
                     faucet) et le message orange ci‑dessus.
                   </p>
                   <div className="rounded-sm border border-[var(--game-cyan-dim)]/40 bg-[rgba(4,2,12,0.5)] p-3 space-y-2">
-                    <label className="block space-y-1">
-                      <span className={`${gameLabel} !text-[9px]`}>
-                        Mot de passe Dynamic (optionnel, si wallet chiffré)
-                      </span>
-                      <input
-                        type="password"
-                        value={claimPassword}
-                        onChange={(e) => setClaimPassword(e.target.value)}
-                        className={gameInput}
-                        autoComplete="current-password"
-                        placeholder="Laisse vide si compte récent"
-                      />
-                    </label>
                     {claimError ? (
                       <p className="text-xs text-[var(--game-danger)]">{claimError}</p>
                     ) : null}

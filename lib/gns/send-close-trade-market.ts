@@ -13,7 +13,6 @@ import { dynamicSignAndSendTransaction } from "@/lib/evm/dynamic-sign-send";
 export async function sendGnsCloseTradeMarket(params: {
   evmClient: DynamicEvmWalletClient;
   walletAddress: Address;
-  password?: string;
   tradeIndex: number;
   expectedPriceUint64: bigint;
 }): Promise<`0x${string}`> {
@@ -39,7 +38,6 @@ export async function sendGnsCloseTradeMarket(params: {
   const hash = await dynamicSignAndSendTransaction({
     evmClient: params.evmClient,
     walletAddress: params.walletAddress,
-    ...(params.password?.trim() ? { password: params.password } : {}),
     to: CONTRACT_GAINS_ARBITRUM_SEPOLIA,
     data,
   });

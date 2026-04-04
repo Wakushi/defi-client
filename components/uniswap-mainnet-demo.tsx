@@ -33,7 +33,6 @@ type SwapResult = {
 export function UniswapMainnetDemo() {
   const [meta, setMeta] = useState<DemoMeta | null>(null);
   const [metaErr, setMetaErr] = useState<string | null>(null);
-  const [walletPassword, setWalletPassword] = useState("");
   const [busy, setBusy] = useState<"eth_usdc" | "usdc_eth" | null>(null);
   const [last, setLast] = useState<SwapResult | null>(null);
 
@@ -68,10 +67,7 @@ export function UniswapMainnetDemo() {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          direction,
-          ...(walletPassword.trim() ? { password: walletPassword } : {}),
-        }),
+        body: JSON.stringify({ direction }),
       });
       const data = (await res.json()) as SwapResult;
       if (!res.ok) {
@@ -131,20 +127,6 @@ export function UniswapMainnetDemo() {
             )}
           </p>
         ) : null}
-
-        <label className="block">
-          <span className={`${gameMuted} text-xs uppercase tracking-wider`}>
-            Mot de passe wallet Dynamic (optionnel)
-          </span>
-          <input
-            type="password"
-            autoComplete="current-password"
-            value={walletPassword}
-            onChange={(e) => setWalletPassword(e.target.value)}
-            placeholder="Si backup chiffré (ancien compte)"
-            className="mt-1 w-full rounded-sm border-2 border-[var(--game-cyan-dim)] bg-[rgba(4,2,12,0.85)] px-3 py-2 font-[family-name:var(--font-share-tech)] text-sm text-[var(--game-text)] outline-none focus:border-[var(--game-cyan)]"
-          />
-        </label>
 
         <div className="flex flex-col gap-3 sm:flex-row">
           <button

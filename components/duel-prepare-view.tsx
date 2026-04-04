@@ -125,9 +125,6 @@ export function DuelPrepareView() {
   const [duelAutoCloseBusy, setDuelAutoCloseBusy] = useState(false);
   const [duelAutoCloseResult, setDuelAutoCloseResult] = useState<string | null>(null);
 
-  /** Wallets créés avec mot de passe Dynamic (anciens comptes) : même valeur qu’à l’inscription si tu ne l’as pas changée. */
-  const [dynamicWalletPassword, setDynamicWalletPassword] = useState("");
-
   const duelCountdownDisplay = useDuelWsCountdown(duelRemainingSeconds, duelTimerEnded);
 
   useEffect(() => {
@@ -142,7 +139,6 @@ export function DuelPrepareView() {
     const batch = takeDuelEndCloseTargets();
     if (!batch?.length) return;
 
-    const pwd = dynamicWalletPassword.trim();
     setDuelAutoCloseBusy(true);
     setDuelAutoCloseResult(null);
 
@@ -157,7 +153,6 @@ export function DuelPrepareView() {
             headers: { "Content-Type": "application/json" },
             credentials: "include",
             body: JSON.stringify({
-              ...(pwd ? { password: pwd } : {}),
               tradeIndex: pos.index ?? 0,
               currentPriceUsdDecimaled: mark,
             }),
@@ -173,13 +168,13 @@ export function DuelPrepareView() {
       setDuelAutoCloseBusy(false);
       if (errs.length > 0) {
         setDuelAutoCloseResult(
-          `Fermeture auto partielle ou en erreur — ${errs.join(" · ")}. Tu peux réessayer à la main ou vérifier le mot de passe Dynamic.`,
+          `Fermeture auto partielle ou en erreur — ${errs.join(" · ")}. Tu peux réessayer à la main depuis les cartes.`,
         );
       } else {
         setDuelAutoCloseResult("Toutes tes positions du duel ont été fermées au marché.");
       }
     })();
-  }, [duelTimerEnded, takeDuelEndCloseTargets, dynamicWalletPassword]);
+  }, [duelTimerEnded, takeDuelEndCloseTargets]);
 
   const [readyLoading, setReadyLoading] = useState(false);
   const [readyError, setReadyError] = useState<string | null>(null);
@@ -357,15 +352,11 @@ export function DuelPrepareView() {
     setExecError(null);
     setExecLoading(true);
     try {
-      const body =
-        dynamicWalletPassword.trim().length > 0
-          ? JSON.stringify({ password: dynamicWalletPassword })
-          : JSON.stringify({});
       const res = await fetch(`/api/duels/${duelId}/execute-trade`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body,
+        body: JSON.stringify({}),
       });
       const data = (await res.json()) as { error?: string; txHash?: string };
       if (!res.ok) {
@@ -380,7 +371,7 @@ export function DuelPrepareView() {
     } finally {
       setExecLoading(false);
     }
-  }, [duelId, dynamicWalletPassword, subscribePositions]);
+  }, [duelId, subscribePositions]);
 
   onExecuteRef.current = onExecute;
 
@@ -506,30 +497,9 @@ export function DuelPrepareView() {
           </p>
           <p className={gameMuted}>
             Configure your pair and mark ready. Countdown 3 → 1 puis{" "}
-            <span className="font-semibold text-[var(--game-magenta)]">signature auto</span>. Si ton wallet a été
-            créé avec un mot de passe Dynamic, remplis le champ ci‑dessous (souvent le même qu’à l’inscription).
+            <span className="font-semibold text-[var(--game-magenta)]">signature auto</span>.
           </p>
         </div>
-
-        {participant ? (
-          <div className={`${gamePanel} space-y-2 p-4`}>
-            <label className="block space-y-1.5">
-              <span className={gameLabel}>Mot de passe wallet Dynamic (optionnel)</span>
-              <p className={`${gameMuted} text-[11px]`}>
-                Obligatoire uniquement si tu vois une erreur du type « Password is required for decryption » — comptes
-                créés avant le passage aux wallets sans mot de passe.
-              </p>
-              <input
-                type="password"
-                value={dynamicWalletPassword}
-                onChange={(e) => setDynamicWalletPassword(e.target.value)}
-                placeholder="Laisser vide si compte récent"
-                className={gameInput}
-                autoComplete="current-password"
-              />
-            </label>
-          </div>
-        ) : null}
 
         {duel.bothReady ? (
           <div className="space-y-4">
@@ -556,8 +526,7 @@ export function DuelPrepareView() {
               </div>
               <p className={`${gameMuted} max-w-md text-[11px]`}>
                 Les positions se mettent à jour en direct. Quand le chrono tombe à 0, tes positions sont fermées au marché
-                automatiquement (une transaction par trade). Si ton wallet Dynamic exige un mot de passe, remplis le champ
-                plus haut avant la fin.
+                automatiquement (une transaction par trade).
               </p>
             </div>
 
@@ -607,7 +576,6 @@ export function DuelPrepareView() {
                 gainsWallet={gainsWallet}
                 gainsChain={gainsChain}
                 wsDuelId={duelId}
-                walletPassword={dynamicWalletPassword}
                 duelEnded={duelTimerEnded}
               />
             </div>
@@ -621,7 +589,6 @@ export function DuelPrepareView() {
             gainsWallet={gainsWallet}
             gainsChain={gainsChain}
             wsDuelId={duelId}
-            walletPassword={dynamicWalletPassword}
           />
         )}
 

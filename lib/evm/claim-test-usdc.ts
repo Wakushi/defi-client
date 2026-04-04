@@ -16,8 +16,6 @@ import {
 export async function claimTestUsdcForWallet(params: {
   evmClient: DynamicEvmWalletClient;
   walletAddress: `0x${string}`;
-  /** Wallet Dynamic chiffré (anciens comptes). */
-  password?: string;
 }): Promise<{
   gasFundTxHash?: `0x${string}`;
   faucetTxHash: `0x${string}`;
@@ -36,7 +34,6 @@ export async function claimTestUsdcForWallet(params: {
   const faucetTxHash = await sendGetFreeDaiTransaction({
     evmClient: params.evmClient,
     walletAddress: params.walletAddress,
-    ...(params.password?.trim() ? { password: params.password } : {}),
   });
 
   return { gasFundTxHash, faucetTxHash };

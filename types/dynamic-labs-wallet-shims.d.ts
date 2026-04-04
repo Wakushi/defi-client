@@ -17,24 +17,20 @@ declare module "@dynamic-labs-wallet/node-evm" {
     authenticateApiToken(authToken: string): Promise<void>;
     createWalletAccount(options: {
       thresholdSignatureScheme: import("@dynamic-labs-wallet/core").ThresholdSignatureScheme;
-      password?: string;
       onError?: (error: Error) => void;
       backUpToClientShareService?: boolean;
     }): Promise<{ accountAddress: string }>;
     signMessage(options: {
       accountAddress: string;
       message: string;
-      password?: string;
     }): Promise<string>;
     signTransaction(options: {
       senderAddress: string;
       transaction: import("viem").TransactionSerializable;
-      password?: string;
     }): Promise<`0x${string}`>;
     signTypedData(options: {
       accountAddress: string;
       typedData: import("viem").SignTypedDataParameters;
-      password?: string;
     }): Promise<`0x${string}`>;
   }
 }
