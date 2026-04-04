@@ -13,8 +13,12 @@ import {
   gameTitle,
 } from "@/components/game-ui";
 import { getSessionFromCookies } from "@/lib/auth/session";
-import { duelVsBannerForViewer } from "@/lib/duel/viewer-vs-order";
 import { findDuelWithPseudos } from "@/lib/db/duels";
+import {
+  normalizeDuelPlayMode,
+  parseStoredGainsChainOptional,
+} from "@/lib/duel/play-mode";
+import { duelVsBannerForViewer } from "@/lib/duel/viewer-vs-order";
 import { findUserById } from "@/lib/db/users";
 
 type Props = {
@@ -58,6 +62,10 @@ export default async function DuelLobbyPage({ params }: Props) {
     }
   }
 
+  const duelPlayMode = normalizeDuelPlayMode(duel.play_mode);
+  const cCh = parseStoredGainsChainOptional(duel.creator_chain);
+  const oCh = parseStoredGainsChainOptional(duel.opponent_chain);
+
   const vs = duelVsBannerForViewer(
     duel.creator_pseudo,
     duel.opponent_pseudo,
@@ -89,6 +97,36 @@ export default async function DuelLobbyPage({ params }: Props) {
           leftTag={vs.leftTag}
           rightTag={vs.rightTag}
         />
+
+        <div
+          className={`rounded-sm border px-4 py-3 text-xs ${
+            duelPlayMode === "duel"
+              ? "border-[var(--game-magenta)]/50 bg-[rgba(255,61,154,0.08)] text-[var(--game-text)]"
+              : "border-[var(--game-cyan-dim)]/60 bg-[rgba(65,245,240,0.06)] text-[var(--game-text-muted)]"
+          }`}
+        >
+          <p className="font-[family-name:var(--font-orbitron)] text-[10px] font-bold uppercase tracking-[0.2em]">
+            {duelPlayMode === "duel" ? "Mode duel" : "Mode friendly"}
+          </p>
+          <p className="mt-1 font-[family-name:var(--font-share-tech)] leading-relaxed">
+            {duelPlayMode === "duel" ? (
+              <>
+                Mainnet (Arbitrum / Base) — chaînes choisies à la préparation : hôte{" "}
+                <span className="text-[var(--game-cyan)]">{cCh ?? "—"}</span>
+                {" · "}
+                invité : <span className="text-[var(--game-cyan)]">{oCh ?? "—"}</span>
+              </>
+            ) : (
+              <>
+                Testnet (faucet) — hôte :{" "}
+                <span className="text-[var(--game-cyan)]">{cCh ?? "Testnet"}</span>
+                {" · "}
+                invité :{" "}
+                <span className="text-[var(--game-cyan)]">{oCh ?? "Testnet"}</span>
+              </>
+            )}
+          </p>
+        </div>
 
         <div className="grid grid-cols-2 gap-3">
           <GameStatPill label="Stake / player" value={`${stakeLabel} USDC`} />

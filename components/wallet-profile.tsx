@@ -9,6 +9,7 @@ import {
   gamePanel,
   gamePanelTopAccent,
 } from "@/components/game-ui";
+import { usePlayMode } from "@/components/play-mode-context";
 import type { MobulaPortfolioPayload, MobulaPortfolioPosition } from "@/types/mobula-portfolio";
 
 type Props = {
@@ -38,6 +39,7 @@ function shortAddress(addr: string) {
 }
 
 export function WalletProfile({ walletAddress }: Props) {
+  const { playMode } = usePlayMode();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [payload, setPayload] = useState<MobulaPortfolioPayload | null>(null);
@@ -46,7 +48,10 @@ export function WalletProfile({ walletAddress }: Props) {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/wallet/portfolio", { credentials: "include" });
+      const res = await fetch(
+        `/api/wallet/portfolio?playMode=${encodeURIComponent(playMode)}`,
+        { credentials: "include" },
+      );
       const data = (await res.json()) as MobulaPortfolioPayload & { error?: string };
       if (!res.ok) {
         setPayload(null);
@@ -60,11 +65,11 @@ export function WalletProfile({ walletAddress }: Props) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [playMode]);
 
   useEffect(() => {
     void load();
-  }, [load, walletAddress]);
+  }, [load, walletAddress, playMode]);
 
   return (
     <div className={`${gamePanel} ${gamePanelTopAccent} overflow-hidden`}>
@@ -79,7 +84,17 @@ export function WalletProfile({ walletAddress }: Props) {
         <p className="mt-1 font-[family-name:var(--font-orbitron)] text-3xl font-black tabular-nums tracking-tight text-[var(--game-text)] [text-shadow:0_0_28px_rgba(65,245,240,0.25)] sm:text-4xl">
           {loading ? "…" : payload ? formatUsd(payload.totalWalletBalanceUsd) : "—"}
         </p>
-        {payload?.usedOnchainFallback ? (
+        {payload?.mobulaSkippedReason === "friendly_hub_testnet_only" ? (
+          <p className={`${gameMuted} mt-2 text-xs`}>
+            Mode Friendly — solde limité au collatéral testnet (Arbitrum Sepolia).
+          </p>
+        ) : payload?.hubPlayMode === "duel" && payload.usedOnchainFallback ? (
+          <p className={`${gameMuted} mt-2 text-xs`}>
+            Mode Duel — repli on-chain (Mobula indisponible ou vide).
+          </p>
+        ) : payload?.hubPlayMode === "duel" ? (
+          <p className={`${gameMuted} mt-2 text-xs`}>Mode Duel — portefeuille indexé via Mobula.</p>
+        ) : payload?.usedOnchainFallback ? (
           <p className={`${gameMuted} mt-2 text-xs`}>On-chain collateral on faucet chain (testnet).</p>
         ) : (
           <p className={`${gameMuted} mt-2 text-xs`}>Indexed via Mobula where configured.</p>

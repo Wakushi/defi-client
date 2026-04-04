@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
 import { Chakra_Petch, Orbitron, Share_Tech_Mono } from "next/font/google";
+
+import { PlayModeProvider } from "@/components/play-mode-context";
+
 import "./globals.css";
 
 const chakraPetch = Chakra_Petch({
@@ -36,10 +39,12 @@ export default function RootLayout({
       className={`${chakraPetch.variable} ${orbitron.variable} ${shareTechMono.variable} h-full antialiased`}
     >
       <body className="min-h-full">
-        <div className="game-arena flex min-h-full flex-col">
-          <div className="game-scanlines" aria-hidden />
-          <div className="game-content flex flex-1 flex-col">{children}</div>
-        </div>
+        <PlayModeProvider>
+          <div className="game-arena flex min-h-full flex-col">
+            <div className="game-scanlines" aria-hidden />
+            <div className="game-content flex flex-1 flex-col">{children}</div>
+          </div>
+        </PlayModeProvider>
       </body>
     </html>
   );

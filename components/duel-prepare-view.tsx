@@ -6,6 +6,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from "react"
@@ -77,6 +78,11 @@ type DuelPayload = {
   durationSeconds: number
   duelFull: boolean
   viewer: { isCreator: boolean; isOpponent: boolean } | null
+  playMode?: "friendly" | "duel"
+  creatorChain?: GainsApiChain | null
+  opponentChain?: GainsApiChain | null
+  /** Chaîne Gains imposée pour le viewer (créateur / adversaire). */
+  myExecGainsChain?: GainsApiChain | null
   readyState: [number, number]
   readyBothAt: string | null
   bothReady: boolean
@@ -188,7 +194,9 @@ export function DuelPrepareView() {
               tradeIndex: pos.index ?? 0,
               currentPriceUsdDecimaled: mark,
               gainsChain:
-                duel?.myTradeConfig?.gainsChain ?? gainsChain,
+                duel?.myExecGainsChain ??
+                duel?.myTradeConfig?.gainsChain ??
+                gainsChain,
             }),
           })
           const data = (await r.json()) as { error?: string }
@@ -249,6 +257,9 @@ export function DuelPrepareView() {
         msSinceStart: duelStartSignalAt ? Date.now() - duelStartSignalAt : null,
       })
       setDuel(data)
+      if (data.myExecGainsChain) {
+        setGainsChain(data.myExecGainsChain)
+      }
       if (data.myOpenTradeTxHash) {
         setTxHash(data.myOpenTradeTxHash)
       } else if (data.myTradeOpened) {
@@ -318,6 +329,10 @@ export function DuelPrepareView() {
 
   const participant =
     duel?.viewer && (duel.viewer.isCreator || duel.viewer.isOpponent)
+
+  const gainsPickerChainOptions = useMemo((): GainsApiChain[] => {
+    return duel?.playMode === "duel" ? ["Arbitrum", "Base"] : ["Testnet"]
+  }, [duel?.playMode])
 
   /** Booléen dérivé : évite un tableau de deps dont la « forme » change (warning React / Fast Refresh). */
   const shouldPollDuel =
@@ -871,6 +886,24 @@ export function DuelPrepareView() {
             <h2 className="font-[family-name:var(--font-orbitron)] text-sm font-bold uppercase tracking-wider text-[var(--game-magenta)]">
               Your settings
             </h2>
+            {duel.myExecGainsChain ? (
+              <p className={`${gameMuted} text-xs`}>
+                {duel.playMode === "duel" ? "Mode Duel" : "Mode Friendly"} — chaîne imposée pour ton trade :{" "}
+                <span className="text-[var(--game-cyan)]">{duel.myExecGainsChain}</span>
+                {duel.creatorChain != null && duel.opponentChain != null ? (
+                  <>
+                    {" "}
+                    (hôte {duel.creatorChain} · invité {duel.opponentChain})
+                  </>
+                ) : null}
+              </p>
+            ) : duel.playMode === "duel" ? (
+              <p className={`${gameMuted} text-xs`}>
+                Mode Duel — choisis <span className="text-[var(--game-cyan)]">Arbitrum</span> ou{" "}
+                <span className="text-[var(--game-cyan)]">Base</span> pour ton trade ; la chaîne est
+                enregistrée quand tu marques prêt.
+              </p>
+            ) : null}
             <div className="space-y-2">
               <span className={gameLabel}>Trading pair</span>
               <p className={`${gameMuted} text-xs`}>
@@ -882,6 +915,8 @@ export function DuelPrepareView() {
               </p>
               <GainsPairPicker
                 chain={gainsChain}
+                chainOptions={gainsPickerChainOptions}
+                chainSelectDisabled={Boolean(duel.myExecGainsChain)}
                 onChainChange={(c) => {
                   setGainsChain(c)
                   setPairIndex(0)

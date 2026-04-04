@@ -35,6 +35,12 @@ export interface DuelsTable {
   opponent_trade_opened_at: Date | null
   creator_open_trade_tx_hash: string | null
   opponent_open_trade_tx_hash: string | null
+  /** `friendly` = testnet faucet (ex. Arb Sepolia) · `duel` = mainnet réel. */
+  play_mode: string
+  /** Chaîne Gains pour le créateur, ou sentinelle `unset` (mode duel avant trade ready). */
+  creator_chain: string
+  /** Chaîne Gains pour l’adversaire. */
+  opponent_chain: string
   created_at: Generated<Date>
   /** Renseigné par défaut côté SQL ; pas passé à l’insert Kysely. */
   updated_at: ColumnType<Date, never, Date>

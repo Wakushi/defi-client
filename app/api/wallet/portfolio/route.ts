@@ -10,6 +10,7 @@ import type { MobulaPortfolioPayload } from "@/types/mobula-portfolio";
 
 export const runtime = "nodejs";
 
+/** Mode hub : `friendly` = uniquement collatéral testnet (pas Mobula multi-chain). */
 export async function GET(request: NextRequest) {
   const session = await getSessionFromRequest(request);
   if (!session) {
@@ -45,6 +46,9 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  const hubPlayMode = request.nextUrl.searchParams.get("playMode");
+  const friendlyHub = hubPlayMode !== "duel";
+
   const faucetMeta: Pick<
     MobulaPortfolioPayload,
     "faucetChainId" | "gainsCollateralTokenAddress"
@@ -55,30 +59,39 @@ export async function GET(request: NextRequest) {
       : {}),
   };
 
-  async function onchainFallback(reason: "mobula_error" | "mobula_empty") {
+  if (friendlyHub) {
     const position = await readFaucetChainCollateralBalance(wallet);
-    if (!position) return null;
+    if (!position) {
+      return NextResponse.json(
+        {
+          error:
+            "Mode friendly : impossible de lire le collatéral sur la chaîne testnet (FAUCET_* / GNS_COLLATERAL).",
+        },
+        { status: 502 },
+      );
+    }
     const body: MobulaPortfolioPayload = {
       wallet,
       totalWalletBalanceUsd: position.estimatedUsd,
       positions: [position],
       usedOnchainFallback: true,
-      mobulaSkippedReason: reason,
+      mobulaSkippedReason: "friendly_hub_testnet_only",
+      hubPlayMode: "friendly",
       ...faucetMeta,
     };
     return NextResponse.json(body);
   }
 
   try {
-    const data = await fetchMobulaWalletPortfolio({ wallet });
-    if (data.positions.length === 0) {
-      const fb = await onchainFallback("mobula_empty");
-      if (fb) return fb;
-    }
-    return NextResponse.json({ ...data, usedOnchainFallback: false, ...faucetMeta });
+    /** Pas de repli testnet : le mode duel n’utilise que le mainnet (Mobula filtré). */
+    const data = await fetchMobulaWalletPortfolio({ wallet, mainnetOnly: true });
+    return NextResponse.json({
+      ...data,
+      usedOnchainFallback: false,
+      hubPlayMode: "duel",
+      ...faucetMeta,
+    });
   } catch (e) {
-    const fb = await onchainFallback("mobula_error");
-    if (fb) return fb;
     const message = e instanceof Error ? e.message : "Mobula error.";
     return NextResponse.json({ error: message }, { status: 502 });
   }

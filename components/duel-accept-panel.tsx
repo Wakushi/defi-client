@@ -18,6 +18,7 @@ import {
 import { LoginForm } from "@/components/login-form";
 import { SignupForm } from "@/components/signup-form";
 import { duelVsBannerForViewer } from "@/lib/duel/viewer-vs-order";
+import type { GainsApiChain } from "@/types/gains-api";
 
 type DuelApi = {
   id: string;
@@ -28,15 +29,51 @@ type DuelApi = {
   createdAt: string;
   duelFull: boolean;
   viewer: { isCreator: boolean; isOpponent: boolean } | null;
+  playMode?: "friendly" | "duel";
+  creatorChain?: string | null;
+  opponentChain?: string | null;
   duelLiveAt?: string | null;
   duelClosedAt?: string | null;
   myTradeOpened?: boolean;
   myOpenTradeTxHash?: string | null;
 };
 
+function opponentCollateralGainsChain(d: DuelApi | null): GainsApiChain | undefined {
+  const c = d?.opponentChain;
+  if (c === "Testnet" || c === "Arbitrum" || c === "Base") return c;
+  return undefined;
+}
+
+function chainLabelForStakeUi(chain?: string | null): string {
+  if (chain === "Arbitrum") return "Arbitrum One";
+  if (chain === "Testnet") return "Arbitrum Sepolia (testnet)";
+  if (chain === "Base") return "Base";
+  return "la chaîne du duel";
+}
+
+function joinRequirementLabel(d: DuelApi): string {
+  if (d.playMode === "duel") {
+    return "ton portefeuille (total estimé en USD, indexé par Mobula)";
+  }
+  return chainLabelForStakeUi(d.opponentChain);
+}
+
+function formatUsdEstimate(n: number) {
+  if (!Number.isFinite(n)) return "—";
+  return new Intl.NumberFormat("fr-FR", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: n >= 1 ? 2 : 6,
+  }).format(n);
+}
+
+const STAKE_USD_EPS = 1e-6;
+
 type BalanceApi = {
+  kind: "collateral" | "portfolio_usd";
   configured: boolean;
   balanceRaw?: string;
+  totalUsd?: number;
   decimals?: number;
   formatted?: string;
   error?: string;
@@ -103,22 +140,86 @@ export function DuelAcceptPanel({ duelId }: Props) {
     }
   }, [duelId]);
 
-  const fetchCollateralBalance = useCallback(async (): Promise<BalanceApi | null> => {
+  const fetchCollateralBalance = useCallback(
+    async (gainsChain?: string): Promise<BalanceApi | null> => {
+      try {
+        const q =
+          gainsChain === "Testnet" ||
+          gainsChain === "Arbitrum" ||
+          gainsChain === "Base"
+            ? `?gainsChain=${encodeURIComponent(gainsChain)}`
+            : "";
+        const r = await fetch(`/api/wallet/collateral-balance${q}`, {
+          credentials: "include",
+        });
+        const data = (await r.json()) as {
+          configured?: boolean;
+          balanceRaw?: string;
+          decimals?: number;
+          formatted?: string;
+          error?: string;
+        };
+        if (r.status === 401) {
+          return {
+            kind: "collateral" as const,
+            configured: false,
+            error: "Session expired — sign in again.",
+          };
+        }
+        return {
+          kind: "collateral" as const,
+          configured: Boolean(data.configured),
+          balanceRaw: data.balanceRaw,
+          decimals: data.decimals,
+          formatted: data.formatted,
+          error: data.error,
+        };
+      } catch {
+        return { kind: "collateral" as const, configured: false, error: "Network error." };
+      }
+    },
+    [],
+  );
+
+  const fetchPortfolioUsd = useCallback(async (): Promise<BalanceApi | null> => {
     try {
-      const r = await fetch("/api/wallet/collateral-balance", { credentials: "include" });
-      const data = (await r.json()) as BalanceApi & { error?: string };
+      const r = await fetch("/api/wallet/portfolio?playMode=duel", {
+        credentials: "include",
+      });
+      const data = (await r.json()) as {
+        totalWalletBalanceUsd?: number;
+        error?: string;
+      };
       if (r.status === 401) {
-        return { configured: false, error: "Session expired — sign in again." };
+        return {
+          kind: "portfolio_usd",
+          configured: false,
+          error: "Session expired — sign in again.",
+        };
+      }
+      if (!r.ok) {
+        return {
+          kind: "portfolio_usd",
+          configured: false,
+          error: data.error ?? "Impossible de charger le portefeuille.",
+        };
+      }
+      const total = data.totalWalletBalanceUsd;
+      if (typeof total !== "number" || !Number.isFinite(total)) {
+        return {
+          kind: "portfolio_usd",
+          configured: false,
+          error: "Réponse portfolio sans total USD.",
+        };
       }
       return {
-        configured: Boolean(data.configured),
-        balanceRaw: data.balanceRaw,
-        decimals: data.decimals,
-        formatted: data.formatted,
-        error: data.error,
+        kind: "portfolio_usd",
+        configured: true,
+        totalUsd: total,
+        formatted: formatUsdEstimate(total),
       };
     } catch {
-      return { configured: false, error: "Network error." };
+      return { kind: "portfolio_usd", configured: false, error: "Network error." };
     }
   }, []);
 
@@ -126,15 +227,21 @@ export function DuelAcceptPanel({ duelId }: Props) {
     setBalanceLoading(true);
     setBalance(null);
     try {
-      const b = await fetchCollateralBalance();
-      if (b) setBalance(b);
+      if (duel?.playMode === "duel") {
+        const b = await fetchPortfolioUsd();
+        if (b) setBalance(b);
+      } else {
+        const b = await fetchCollateralBalance(opponentCollateralGainsChain(duel));
+        if (b) setBalance(b);
+      }
     } finally {
       setBalanceLoading(false);
     }
-  }, [fetchCollateralBalance]);
+  }, [fetchCollateralBalance, fetchPortfolioUsd, duel]);
 
   const pollBalanceUntilStake = useCallback(
-    async (stakeUsdc: string) => {
+    async (stakeUsdc: string, contextDuel: DuelApi | null) => {
+      const stakeN = Number(stakeUsdc);
       let need: bigint;
       try {
         need = parseUnits(stakeUsdc, 6);
@@ -149,22 +256,40 @@ export function DuelAcceptPanel({ duelId }: Props) {
       setConfirmingUsdc(true);
       setBalanceLoading(true);
       setBalanceCoversStake(false);
+      const isDuel = contextDuel?.playMode === "duel";
       try {
         for (let i = 0; i < BALANCE_POLL_MAX_ATTEMPTS; i++) {
           if (ctrl.signal.aborted) return;
 
-          const b = await fetchCollateralBalance();
-          if (b) setBalance(b);
+          if (isDuel) {
+            const b = await fetchPortfolioUsd();
+            if (b) setBalance(b);
+            if (
+              b?.configured &&
+              b.totalUsd != null &&
+              Number.isFinite(stakeN) &&
+              b.totalUsd + STAKE_USD_EPS >= stakeN
+            ) {
+              setFundingNotice(null);
+              setBalanceCoversStake(true);
+              return;
+            }
+          } else {
+            const b = await fetchCollateralBalance(
+              opponentCollateralGainsChain(contextDuel),
+            );
+            if (b) setBalance(b);
 
-          if (b?.configured && b.balanceRaw !== undefined && b.balanceRaw !== "") {
-            try {
-              if (BigInt(b.balanceRaw) >= need) {
-                setFundingNotice(null);
-                setBalanceCoversStake(true);
-                return;
+            if (b?.configured && b.balanceRaw !== undefined && b.balanceRaw !== "") {
+              try {
+                if (BigInt(b.balanceRaw) >= need) {
+                  setFundingNotice(null);
+                  setBalanceCoversStake(true);
+                  return;
+                }
+              } catch {
+                /* ignore */
               }
-            } catch {
-              /* ignore */
             }
           }
 
@@ -194,7 +319,7 @@ export function DuelAcceptPanel({ duelId }: Props) {
         }
       }
     },
-    [fetchCollateralBalance],
+    [fetchCollateralBalance, fetchPortfolioUsd],
   );
 
   useEffect(() => {
@@ -238,10 +363,18 @@ export function DuelAcceptPanel({ duelId }: Props) {
     if (!shouldLoadBalance) return;
     if (balancePollInProgressRef.current) return;
     void loadBalance();
-  }, [shouldLoadBalance, loadBalance]);
+  }, [shouldLoadBalance, loadBalance, duel?.opponentChain, duel?.playMode]);
 
   const canAccept = useMemo(() => {
     if (!duel || !balance?.configured) return false;
+    const stakeN = Number(duel.stakeUsdc);
+    if (balance.kind === "portfolio_usd") {
+      return (
+        balance.totalUsd != null &&
+        Number.isFinite(stakeN) &&
+        balance.totalUsd + STAKE_USD_EPS >= stakeN
+      );
+    }
     if (balance.balanceRaw === undefined || balance.balanceRaw === "") return false;
     try {
       const need = parseUnits(duel.stakeUsdc, 6);
@@ -252,6 +385,7 @@ export function DuelAcceptPanel({ duelId }: Props) {
   }, [duel, balance]);
 
   async function onClaimFaucet() {
+    if (duel?.playMode === "duel") return;
     setClaimError(null);
     setFundingNotice(null);
     setBalanceCoversStake(false);
@@ -272,7 +406,7 @@ export function DuelAcceptPanel({ duelId }: Props) {
       if (!stake) return;
       balancePollInProgressRef.current = true;
       try {
-        await pollBalanceUntilStake(stake);
+        await pollBalanceUntilStake(stake, duel);
       } finally {
         balancePollInProgressRef.current = false;
       }
@@ -327,8 +461,25 @@ export function DuelAcceptPanel({ duelId }: Props) {
           <p className={gameLabel}>Guest</p>
           <h2 className={`${gameTitle} text-lg sm:text-xl`}>Join the arena</h2>
           <p className={gameMuted}>
-            Sign in or create an account. You will see your account wallet USDC balance; it must cover the
-            stake ({formatUsdcLabel(duel.stakeUsdc)} USDC) to accept.
+            Sign in or create an account. Mise :{" "}
+            <span className="font-medium text-[var(--game-cyan)]">
+              {formatUsdcLabel(duel.stakeUsdc)} USDC
+            </span>{" "}
+            par joueur.{" "}
+            {duel.playMode === "duel" ? (
+              <>
+                Mode Duel — on vérifie que{" "}
+                <span className="text-[var(--game-cyan)]">{joinRequirementLabel(duel)}</span> couvre
+                au moins cette somme en dollars. Chaque joueur choisit Arbitrum ou Base lors de la
+                préparation du trade.
+              </>
+            ) : (
+              <>
+                Mode Friendly — il te faut les USDC sur{" "}
+                <span className="text-[var(--game-cyan)]">{joinRequirementLabel(duel)}</span>. Tu peux
+                utiliser le faucet test si le solde est insuffisant.
+              </>
+            )}
           </p>
         </div>
         <div className={gameTabRow}>
@@ -377,8 +528,8 @@ export function DuelAcceptPanel({ duelId }: Props) {
               }
               try {
                 const d = await loadDuel();
-                if (willPoll && d?.stakeUsdc) {
-                  await pollBalanceUntilStake(d.stakeUsdc);
+                if (willPoll && d?.stakeUsdc && d.playMode !== "duel") {
+                  await pollBalanceUntilStake(d.stakeUsdc, d);
                 } else {
                   void loadBalance();
                 }
@@ -402,8 +553,19 @@ export function DuelAcceptPanel({ duelId }: Props) {
           You run this arena
         </p>
         <p className={gameMuted}>
-          Send the link to your opponent: they sign in, then accept with a wallet that has at least{" "}
-          {formatUsdcLabel(duel.stakeUsdc)} USDC on the faucet chain.
+          Send the link to your opponent: they sign in, then accept. Mise :{" "}
+          {formatUsdcLabel(duel.stakeUsdc)} USDC.{" "}
+          {duel.playMode === "duel" ? (
+            <>
+              Mode Duel — l’invité doit avoir une valeur de portefeuille estimée ≥ à cette mise (USD,
+              Mobula). Les chaînes de trade (Arbitrum / Base) sont choisies à la préparation.
+            </>
+          ) : (
+            <>
+              Mode Friendly — il leur faut les USDC testnet sur{" "}
+              <span className="text-[var(--game-cyan)]">{joinRequirementLabel(duel)}</span>.
+            </>
+          )}
         </p>
         {!duel.duelFull ? (
           <p
@@ -462,6 +624,18 @@ export function DuelAcceptPanel({ duelId }: Props) {
           <span className="font-[family-name:var(--font-share-tech)] font-medium text-[var(--game-cyan)]">
             {formatUsdcLabel(duel.stakeUsdc)} USDC
           </span>
+          .{" "}
+          {duel.playMode === "duel" ? (
+            <>
+              Mode Duel — exigence : total portefeuille estimé ≥ à cette mise (USD). Chaîne de trade
+              choisie plus tard (Arbitrum ou Base).
+            </>
+          ) : (
+            <>
+              Mode Friendly — sur{" "}
+              <span className="text-[var(--game-cyan)]">{joinRequirementLabel(duel)}</span>.
+            </>
+          )}
         </p>
       </div>
 
@@ -501,32 +675,44 @@ export function DuelAcceptPanel({ duelId }: Props) {
           ) : (
             <>
               <p>
-                <span className="text-[var(--game-text-muted)]">Your balance: </span>
+                <span className="text-[var(--game-text-muted)]">
+                  {balance.kind === "portfolio_usd" ? "Total estimé : " : "Your balance: "}
+                </span>
                 <span className="font-[family-name:var(--font-share-tech)] font-medium text-[var(--game-text)]">
-                  {balance.formatted} USDC
+                  {balance.kind === "portfolio_usd"
+                    ? (balance.formatted ?? "—")
+                    : `${balance.formatted ?? "—"} USDC`}
                 </span>
               </p>
               {!canAccept ? (
                 <div className="space-y-3">
                   <p className="text-[var(--game-danger)]">
-                    Solde insuffisant pour la mise. Tu peux redemander un envoi test depuis le serveur (même flux
-                    qu’à l’inscription). Si ça échoue encore, vérifie{" "}
-                    <code className="text-[var(--game-cyan)]">PRIVATE_KEY_GAS_DISPATCHER</code> (ETH sur la chaîne
-                    faucet) et le message orange ci‑dessus.
+                    {duel.playMode === "duel" ? (
+                      `Valeur portefeuille insuffisante : il faut au moins ${formatUsdcLabel(duel.stakeUsdc)} USD estimés (Mobula) pour accepter.`
+                    ) : (
+                      <>
+                        Solde insuffisant pour la mise. Tu peux redemander un envoi test depuis le serveur (même
+                        flux qu’à l’inscription). Si ça échoue encore, vérifie{" "}
+                        <code className="text-[var(--game-cyan)]">PRIVATE_KEY_GAS_DISPATCHER</code> (ETH sur la
+                        chaîne faucet) et le message orange ci‑dessus.
+                      </>
+                    )}
                   </p>
-                  <div className="rounded-sm border border-[var(--game-cyan-dim)]/40 bg-[rgba(4,2,12,0.5)] p-3 space-y-2">
-                    {claimError ? (
-                      <p className="text-xs text-[var(--game-danger)]">{claimError}</p>
-                    ) : null}
-                    <button
-                      type="button"
-                      disabled={claimLoading}
-                      onClick={() => void onClaimFaucet()}
-                      className={`${gameBtnGhost} w-full sm:w-auto`}
-                    >
-                      {claimLoading ? "Envoi…" : "Recevoir USDC test (faucet)"}
-                    </button>
-                  </div>
+                  {duel.playMode !== "duel" ? (
+                    <div className="space-y-2 rounded-sm border border-[var(--game-cyan-dim)]/40 bg-[rgba(4,2,12,0.5)] p-3">
+                      {claimError ? (
+                        <p className="text-xs text-[var(--game-danger)]">{claimError}</p>
+                      ) : null}
+                      <button
+                        type="button"
+                        disabled={claimLoading}
+                        onClick={() => void onClaimFaucet()}
+                        className={`${gameBtnGhost} w-full sm:w-auto`}
+                      >
+                        {claimLoading ? "Envoi…" : "Recevoir USDC test (faucet)"}
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
               ) : (
                 <p className="text-[var(--game-cyan)]">Ready to enter — balance OK.</p>

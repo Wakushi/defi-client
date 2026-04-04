@@ -1,4 +1,8 @@
 import {
+  filterMainnetPortfolioPositions,
+  sumPositionsEstimatedUsd,
+} from "@/lib/mobula/duel-mainnet-chains";
+import {
   flattenMobulaAssets,
   parseMobulaPortfolioBody,
 } from "@/lib/mobula/normalize-portfolio";
@@ -9,6 +13,11 @@ const MOBULA_DEMO = "https://demo-api.mobula.io";
 
 export type FetchMobulaPortfolioOptions = {
   wallet: string;
+  /**
+   * Mode duel / fonds réels : ne pas demander les testnets à Mobula et n’agréger que les
+   * positions sur des chain IDs mainnet connus (exclut Arbitrum Sepolia, etc.).
+   */
+  mainnetOnly?: boolean;
 };
 
 /**
@@ -18,6 +27,7 @@ export type FetchMobulaPortfolioOptions = {
 export async function fetchMobulaWalletPortfolio(
   options: FetchMobulaPortfolioOptions,
 ): Promise<MobulaPortfolioPayload> {
+  const mainnetOnly = options.mainnetOnly === true;
   const apiKey = process.env.MOBULA_API_KEY?.trim();
   const base = apiKey ? MOBULA_API : MOBULA_DEMO;
 
@@ -38,7 +48,7 @@ export async function fetchMobulaWalletPortfolio(
     url.searchParams.set("blockchains", blockchains);
   }
 
-  if (process.env.MOBULA_TESTNET === "true") {
+  if (!mainnetOnly && process.env.MOBULA_TESTNET === "true") {
     url.searchParams.set("testnet", "true");
   }
 
@@ -69,11 +79,17 @@ export async function fetchMobulaWalletPortfolio(
     throw new Error("Mobula portfolio: unexpected response.");
   }
 
-  const positions = flattenMobulaAssets(parsed.assets);
+  let positions = flattenMobulaAssets(parsed.assets);
+  let total = parsed.total_wallet_balance;
+
+  if (mainnetOnly) {
+    positions = filterMainnetPortfolioPositions(positions);
+    total = sumPositionsEstimatedUsd(positions);
+  }
 
   return {
     wallet: parsed.wallet || options.wallet,
-    totalWalletBalanceUsd: parsed.total_wallet_balance,
+    totalWalletBalanceUsd: total,
     positions,
   };
 }

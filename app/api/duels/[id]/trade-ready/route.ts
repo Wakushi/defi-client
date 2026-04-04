@@ -3,6 +3,10 @@ import { type NextRequest, NextResponse } from "next/server";
 import { getSessionFromRequest } from "@/lib/auth/session";
 import { markParticipantTradeReady } from "@/lib/db/duel-ready";
 import { findDuelById } from "@/lib/db/duels";
+import {
+  normalizeDuelPlayMode,
+  parseStoredGainsChain,
+} from "@/lib/duel/play-mode";
 import { findUserById } from "@/lib/db/users";
 import type { GainsApiChain } from "@/types/gains-api";
 import type { DuelTradeSideConfig } from "@/types/duel-trade";
@@ -86,12 +90,33 @@ export async function POST(
     return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
   }
 
-  const config = parseBodyConfig(body);
-  if (!config) {
+  const parsed = parseBodyConfig(body);
+  if (!parsed) {
     return NextResponse.json(
       { error: "pairIndex (0–65535), leverageX (1–500), and long are required." },
       { status: 400 },
     );
+  }
+
+  const playMode = normalizeDuelPlayMode(duel.play_mode);
+  let config: DuelTradeSideConfig;
+  if (playMode === "duel") {
+    const gc = parsed.gainsChain;
+    if (gc !== "Arbitrum" && gc !== "Base") {
+      return NextResponse.json(
+        {
+          error:
+            "En mode duel, choisis une chaîne d’exécution : gainsChain = Arbitrum ou Base.",
+        },
+        { status: 400 },
+      );
+    }
+    config = { ...parsed, gainsChain: gc };
+  } else {
+    const forcedChain = parseStoredGainsChain(
+      isCreator ? duel.creator_chain : duel.opponent_chain,
+    );
+    config = { ...parsed, gainsChain: forcedChain };
   }
 
   const result = await markParticipantTradeReady({

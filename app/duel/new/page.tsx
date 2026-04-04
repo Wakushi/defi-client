@@ -17,8 +17,10 @@ import {
   gameSubtitle,
   gameTitle,
 } from "@/components/game-ui";
+import { usePlayMode } from "@/components/play-mode-context";
 
 export default function NewDuelPage() {
+  const { playMode } = usePlayMode();
   const [authChecked, setAuthChecked] = useState(false);
   const [loggedIn, setLoggedIn] = useState(false);
   const [stakeUsdc, setStakeUsdc] = useState("");
@@ -58,6 +60,7 @@ export default function NewDuelPage() {
         body: JSON.stringify({
           stakeUsdc: stakeUsdc.trim(),
           durationSeconds: min * 60,
+          playMode,
         }),
       });
       const data = (await res.json()) as { error?: string; id?: string; joinPath?: string };
@@ -132,7 +135,9 @@ export default function NewDuelPage() {
           <p className={gameSubtitle}>New match</p>
           <h1 className={gameTitle}>Create duel</h1>
           <p className={gameMuted}>
-            Stake per player and trade duration. An invite link is generated for your opponent.
+            Stake per player and trade duration. An invite link is generated for your opponent. The match is
+            created in your current hub mode ({playMode === "duel" ? "Duel — Arbitrum mainnet" : "Friendly — testnet"}
+            ).
           </p>
         </div>
 

@@ -2,13 +2,22 @@ import { type NextRequest, NextResponse } from "next/server";
 import { getAddress } from "viem";
 
 import { getSessionFromRequest } from "@/lib/auth/session";
-import { readCollateralBalance } from "@/lib/evm/collateral-balance";
+import {
+  readCollateralBalance,
+  readCollateralBalanceForGainsChain,
+} from "@/lib/evm/collateral-balance";
+import type { GainsApiChain } from "@/types/gains-api";
 import { findUserById } from "@/lib/db/users";
 
 export const runtime = "nodejs";
 
-export async function GET(_request: NextRequest) {
-  const session = await getSessionFromRequest(_request);
+function parseGainsChainParam(raw: string | null): GainsApiChain | null {
+  if (raw === "Testnet" || raw === "Arbitrum" || raw === "Base") return raw;
+  return null;
+}
+
+export async function GET(request: NextRequest) {
+  const session = await getSessionFromRequest(request);
   if (!session) {
     return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   }
@@ -32,7 +41,12 @@ export async function GET(_request: NextRequest) {
     return NextResponse.json({ error: "Invalid wallet address." }, { status: 500 });
   }
 
-  const bal = await readCollateralBalance(wallet);
+  const gainsChain = parseGainsChainParam(
+    request.nextUrl.searchParams.get("gainsChain"),
+  );
+  const bal = gainsChain
+    ? await readCollateralBalanceForGainsChain(wallet, gainsChain)
+    : await readCollateralBalance(wallet);
   if (!bal) {
     return NextResponse.json({
       configured: false,

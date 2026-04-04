@@ -1,11 +1,11 @@
-import type { DynamicEvmWalletClient } from "@dynamic-labs-wallet/node-evm";
-import { encodeFunctionData, type Address, type Chain } from "viem";
+import type { DynamicEvmWalletClient } from "@dynamic-labs-wallet/node-evm"
+import { encodeFunctionData, type Address, type Chain } from "viem"
 
-import { gnsTradeAbi } from "@/constants/gnsTrade";
-import { dynamicSignAndSendTransaction } from "@/lib/evm/dynamic-sign-send";
-import type { GnsTrade } from "@/types/gns-trade";
+import { gnsTradeAbi } from "@/constants/gnsTrade"
+import { dynamicSignAndSendTransaction } from "@/lib/evm/dynamic-sign-send"
+import type { GnsTrade } from "@/types/gns-trade"
 
-const DEFAULT_MAX_SLIPPAGE_P = 3000;
+const DEFAULT_MAX_SLIPPAGE_P = 3000
 
 function tradeToTuple(t: GnsTrade) {
   return {
@@ -24,7 +24,7 @@ function tradeToTuple(t: GnsTrade) {
     isCounterTrade: t.isCounterTrade,
     positionSizeToken: t.positionSizeToken,
     __placeholder: t.__placeholder,
-  };
+  }
 }
 
 /**
@@ -32,31 +32,28 @@ function tradeToTuple(t: GnsTrade) {
  * Call {@link approveCollateralIfNeeded} first.
  */
 export async function sendGnsOpenTrade(params: {
-  evmClient: DynamicEvmWalletClient;
-  walletAddress: Address;
-  trade: GnsTrade;
-  chain: Chain;
-  diamond: Address;
+  evmClient: DynamicEvmWalletClient
+  walletAddress: Address
+  trade: GnsTrade
+  chain: Chain
+  diamond: Address
 }): Promise<`0x${string}`> {
   const referrer = (
     process.env.GNS_REFERRER_ADDRESS?.startsWith("0x")
       ? process.env.GNS_REFERRER_ADDRESS
       : "0x0000000000000000000000000000000000000000"
-  ) as Address;
+  ) as Address
 
-  const maxSlippageP = Number(process.env.GNS_MAX_SLIPPAGE_P) || DEFAULT_MAX_SLIPPAGE_P;
+  const maxSlippageP =
+    Number(process.env.GNS_MAX_SLIPPAGE_P) || DEFAULT_MAX_SLIPPAGE_P
 
   const data = encodeFunctionData({
     abi: gnsTradeAbi,
     functionName: "openTrade",
-    args: [
-      tradeToTuple(params.trade),
-      maxSlippageP,
-      referrer,
-    ],
-  });
+    args: [tradeToTuple(params.trade), maxSlippageP, referrer],
+  })
 
-  const t = params.trade;
+  const t = params.trade
   console.log("[Gains openTrade]", {
     contract: params.diamond,
     wallet: params.walletAddress,
@@ -71,7 +68,7 @@ export async function sendGnsOpenTrade(params: {
     maxSlippageP,
     referrer,
     calldataBytes: data.length,
-  });
+  })
 
   const hash = await dynamicSignAndSendTransaction({
     evmClient: params.evmClient,
@@ -79,9 +76,9 @@ export async function sendGnsOpenTrade(params: {
     to: params.diamond,
     data,
     chain: params.chain,
-  });
+  })
 
-  console.log("[Gains openTrade] txHash", hash);
+  console.log("[Gains openTrade] txHash", hash)
 
-  return hash;
+  return hash
 }

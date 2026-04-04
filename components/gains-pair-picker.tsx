@@ -18,6 +18,10 @@ type Props = {
   selectedPairIndex: number;
   onSelectPair: (pair: GainsTradingPair) => void;
   disabled?: boolean;
+  /** Ex. duel : la chaîne d’exécution est imposée par le match, seules les paires changent. */
+  chainSelectDisabled?: boolean;
+  /** Sous-ensemble de chaînes (ex. mode duel = Arbitrum + Base). */
+  chainOptions?: GainsApiChain[];
 };
 
 export function GainsPairPicker({
@@ -26,10 +30,24 @@ export function GainsPairPicker({
   selectedPairIndex,
   onSelectPair,
   disabled,
+  chainSelectDisabled,
+  chainOptions,
 }: Props) {
+  const options = chainOptions?.length ? chainOptions : CHAINS;
+
   const [pairs, setPairs] = useState<GainsTradingPair[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const optKey = options.join(",");
+  useEffect(() => {
+    if (!options.includes(chain)) {
+      const first = options[0];
+      if (first) onChainChange(first);
+    }
+    // onChainChange souvent recréé côté parent ; on corrige seulement chain vs options.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- optKey + chain suffisent
+  }, [optKey, chain]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -65,11 +83,11 @@ export function GainsPairPicker({
           <span className={gameLabel}>Gains API chain</span>
           <select
             value={chain}
-            disabled={disabled}
+            disabled={disabled || chainSelectDisabled}
             onChange={(e) => onChainChange(e.target.value as GainsApiChain)}
             className={gameInput}
           >
-            {CHAINS.map((c) => (
+            {options.map((c) => (
               <option key={c} value={c}>
                 {c}
               </option>

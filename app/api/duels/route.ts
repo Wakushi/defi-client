@@ -4,6 +4,10 @@ import { formatUnits, parseUnits } from "viem";
 import { getSessionFromRequest } from "@/lib/auth/session";
 import { insertDuel } from "@/lib/db/duels";
 import { findUserById } from "@/lib/db/users";
+import {
+  initialDuelChainsForInsert,
+  normalizeDuelPlayMode,
+} from "@/lib/duel/play-mode";
 
 export const runtime = "nodejs";
 
@@ -73,10 +77,16 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const playMode = normalizeDuelPlayMode(b.playMode);
+  const { creatorChain, opponentChain } = initialDuelChainsForInsert(playMode);
+
   const { id } = await insertDuel({
     creatorId: user.id,
     stakeUsdc,
     durationSeconds,
+    playMode,
+    creatorChain,
+    opponentChain,
   });
 
   return NextResponse.json({

@@ -2,7 +2,12 @@ import { type NextRequest, NextResponse } from "next/server";
 import { getAddress, parseUnits } from "viem";
 
 import { getSessionFromRequest } from "@/lib/auth/session";
-import { readCollateralBalance } from "@/lib/evm/collateral-balance";
+import { assertWalletUsdCoversStake } from "@/lib/duel/join-wallet-usd";
+import {
+  normalizeDuelPlayMode,
+  parseStoredGainsChain,
+} from "@/lib/duel/play-mode";
+import { readCollateralBalanceForGainsChain } from "@/lib/evm/collateral-balance";
 import { findDuelById, findDuelWithPseudos, setDuelOpponent } from "@/lib/db/duels";
 import { findUserById } from "@/lib/db/users";
 
@@ -72,25 +77,46 @@ export async function POST(
     return NextResponse.json({ error: "Invalid duel stake in database." }, { status: 500 });
   }
 
-  const bal = await readCollateralBalance(wallet);
-  if (!bal) {
-    return NextResponse.json(
-      {
-        error: "Could not read your USDC balance (RPC / GNS_COLLATERAL_TOKEN_ADDRESS).",
-      },
-      { status: 502 },
-    );
-  }
+  const playMode = normalizeDuelPlayMode(duel.play_mode);
 
-  if (bal.balanceRaw < stakeWei) {
-    return NextResponse.json(
-      {
-        error: "Insufficient USDC balance to accept this stake.",
-        balanceRaw: bal.balanceRaw.toString(),
-        stakeRaw: stakeWei.toString(),
-      },
-      { status: 400 },
-    );
+  if (playMode === "duel") {
+    const usd = await assertWalletUsdCoversStake(wallet, duel.stake_usdc);
+    if (!usd.ok) {
+      return NextResponse.json(
+        {
+          error: usd.error,
+          ...(usd.totalUsd != null
+            ? { totalWalletBalanceUsd: usd.totalUsd }
+            : {}),
+        },
+        { status: usd.httpStatus },
+      );
+    }
+  } else {
+    const joinChain = parseStoredGainsChain(duel.opponent_chain);
+    const bal = await readCollateralBalanceForGainsChain(wallet, joinChain);
+    if (!bal) {
+      return NextResponse.json(
+        {
+          error:
+            joinChain === "Arbitrum"
+              ? "Impossible de lire ton USDC sur Arbitrum One (ARBITRUM_RPC_URL, collatéral)."
+              : "Could not read your USDC balance (RPC / GNS_COLLATERAL_TOKEN_ADDRESS).",
+        },
+        { status: 502 },
+      );
+    }
+
+    if (bal.balanceRaw < stakeWei) {
+      return NextResponse.json(
+        {
+          error: "Insufficient USDC balance to accept this stake.",
+          balanceRaw: bal.balanceRaw.toString(),
+          stakeRaw: stakeWei.toString(),
+        },
+        { status: 400 },
+      );
+    }
   }
 
   const ok = await setDuelOpponent(duelId, user.id);

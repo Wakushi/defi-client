@@ -15,6 +15,7 @@ import {
 } from "@/components/game-ui"
 import { LoginForm } from "@/components/login-form"
 import { SignupForm } from "@/components/signup-form"
+import { HubPlayModeMenu } from "@/components/hub-play-mode-menu"
 import { UniswapMainnetDemo } from "@/components/uniswap-mainnet-demo"
 import { WalletProfile } from "@/components/wallet-profile"
 
@@ -100,6 +101,11 @@ export function HomeAuth() {
               Log out
             </button>
           </div>
+        </div>
+
+        <div className={`${gamePanel} ${gamePanelTopAccent} p-6 sm:p-8`}>
+          <p className={`${gameTitle} mb-4 text-lg sm:text-xl`}>Menu</p>
+          <HubPlayModeMenu />
         </div>
 
         <Link

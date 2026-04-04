@@ -100,6 +100,9 @@ export async function markParticipantTradeReady(params: {
           .set({
             ...baseSet,
             creator_trade_config: sql`(${sql.lit(configJson)})::jsonb`,
+            ...(params.config.gainsChain
+              ? { creator_chain: params.config.gainsChain }
+              : {}),
           })
           .where("id", "=", params.duelId)
           .execute();
@@ -109,6 +112,9 @@ export async function markParticipantTradeReady(params: {
           .set({
             ...baseSet,
             opponent_trade_config: sql`(${sql.lit(configJson)})::jsonb`,
+            ...(params.config.gainsChain
+              ? { opponent_chain: params.config.gainsChain }
+              : {}),
           })
           .where("id", "=", params.duelId)
           .execute();

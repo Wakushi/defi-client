@@ -1,3 +1,6 @@
+import type { DuelPlayMode } from "@/types/play-mode"
+import type { GainsApiChain } from "@/types/gains-api"
+
 import { getDb } from "./index"
 import { findUserById } from "./users"
 
@@ -5,6 +8,9 @@ export async function insertDuel(input: {
   creatorId: string
   stakeUsdc: string
   durationSeconds: number
+  playMode: DuelPlayMode
+  creatorChain: string
+  opponentChain: string
 }) {
   return getDb()
     .insertInto("duels")
@@ -13,6 +19,9 @@ export async function insertDuel(input: {
       opponent_id: null,
       stake_usdc: input.stakeUsdc,
       duration_seconds: input.durationSeconds,
+      play_mode: input.playMode,
+      creator_chain: input.creatorChain,
+      opponent_chain: input.opponentChain,
     })
     .returning("id")
     .executeTakeFirstOrThrow()

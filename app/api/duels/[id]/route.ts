@@ -4,6 +4,11 @@ import { getSessionFromRequest } from "@/lib/auth/session"
 import { parseDuelTradeConfig, parseReadyState } from "@/lib/db/duel-ready"
 import { findDuelWithPseudos } from "@/lib/db/duels"
 import { findUserById } from "@/lib/db/users"
+import {
+  normalizeDuelPlayMode,
+  parseStoredGainsChainOptional,
+} from "@/lib/duel/play-mode"
+import type { GainsApiChain } from "@/types/gains-api"
 
 export const runtime = "nodejs"
 
@@ -78,6 +83,18 @@ export async function GET(
     myOpenTradeTxHash = duel.opponent_open_trade_tx_hash ?? null
   }
 
+  const playMode = normalizeDuelPlayMode(duel.play_mode)
+  const creatorChain = parseStoredGainsChainOptional(duel.creator_chain)
+  const opponentChain = parseStoredGainsChainOptional(duel.opponent_chain)
+  let myExecGainsChain: GainsApiChain | null = null
+  if (viewer?.isCreator) {
+    myExecGainsChain =
+      creatorChain ?? myTradeConfig?.gainsChain ?? null
+  } else if (viewer?.isOpponent) {
+    myExecGainsChain =
+      opponentChain ?? myTradeConfig?.gainsChain ?? null
+  }
+
   return NextResponse.json({
     id: duel.id,
     creatorPseudo: duel.creator_pseudo,
@@ -96,5 +113,9 @@ export async function GET(
     duelClosedAt,
     myTradeOpened,
     myOpenTradeTxHash,
+    playMode,
+    creatorChain,
+    opponentChain,
+    myExecGainsChain,
   })
 }
