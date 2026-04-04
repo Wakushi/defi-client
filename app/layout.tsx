@@ -1,37 +1,37 @@
-import type { Metadata } from "next";
-import { Chakra_Petch, Orbitron, Share_Tech_Mono } from "next/font/google";
+import type { Metadata } from "next"
+import { Chakra_Petch, Orbitron, Share_Tech_Mono } from "next/font/google"
 
-import { PlayModeProvider } from "@/components/play-mode-context";
+import { PlayModeProvider } from "@/components/play-mode-context"
 
-import "./globals.css";
+import "./globals.css"
 
 const chakraPetch = Chakra_Petch({
   variable: "--font-chakra-petch",
   subsets: ["latin"],
   weight: ["400", "600", "700"],
-});
+})
 
 const orbitron = Orbitron({
   variable: "--font-orbitron",
   subsets: ["latin"],
   weight: ["500", "700", "900"],
-});
+})
 
 const shareTechMono = Share_Tech_Mono({
   variable: "--font-share-tech",
   subsets: ["latin"],
   weight: ["400"],
-});
+})
 
 export const metadata: Metadata = {
   title: "DeFi — On-chain arena",
   description: "Trading duels with an embedded wallet",
-};
+}
 
 export default function RootLayout({
   children,
 }: Readonly<{
-  children: React.ReactNode;
+  children: React.ReactNode
 }>) {
   return (
     <html
@@ -47,5 +47,5 @@ export default function RootLayout({
         </PlayModeProvider>
       </body>
     </html>
-  );
+  )
 }

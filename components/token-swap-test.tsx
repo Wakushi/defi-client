@@ -100,7 +100,7 @@ export function TokenSwapTest() {
     return b.estimatedUsd - a.estimatedUsd
   })
 
-  const selected = selectedIdx != null ? sorted[selectedIdx] ?? null : null
+  const selected = selectedIdx != null ? (sorted[selectedIdx] ?? null) : null
   const selectedIsUsdc = selected ? isUsdcToken(selected) : false
   const stakeNum = Number(stakeUsdc) || 0
 
@@ -138,14 +138,26 @@ export function TokenSwapTest() {
           credentials: "include",
         })
         const data = (await res.json()) as Record<string, unknown>
-        console.log("[swap-quote-client] response status:", res.status, "body:", data)
+        console.log(
+          "[swap-quote-client] response status:",
+          res.status,
+          "body:",
+          data,
+        )
         if (cancelled) return
         if (!res.ok) {
           setQuoteError((data.error as string) ?? "Quote failed.")
         } else if (!data.noSwapNeeded && typeof data.amountIn === "string") {
           setQuoteAmountIn(data.amountIn)
         } else {
-          console.log("[swap-quote-client] no amountIn found, noSwapNeeded:", data.noSwapNeeded, "amountIn type:", typeof data.amountIn, "value:", data.amountIn)
+          console.log(
+            "[swap-quote-client] no amountIn found, noSwapNeeded:",
+            data.noSwapNeeded,
+            "amountIn type:",
+            typeof data.amountIn,
+            "value:",
+            data.amountIn,
+          )
         }
       } catch (e) {
         console.error("[swap-quote-client] error:", e)
@@ -255,9 +267,7 @@ export function TokenSwapTest() {
             </button>
           </div>
         ) : sorted.length === 0 ? (
-          <p className={`${gameMuted} text-xs`}>
-            No tokens found on Arbitrum.
-          </p>
+          <p className={`${gameMuted} text-xs`}>No tokens found on Arbitrum.</p>
         ) : (
           <div className="space-y-1">
             {sorted.map((pos, idx) => {
@@ -341,7 +351,8 @@ export function TokenSwapTest() {
                 </p>
               ) : quoteAmountIn ? (
                 <p className="font-[family-name:var(--font-share-tech)] text-xs text-[var(--game-text)]">
-                  ≈ {formatRawAmount(quoteAmountIn, selected.decimals ?? 18)} {selected.symbol} → {stakeUsdc} USDC
+                  ≈ {formatRawAmount(quoteAmountIn, selected.decimals ?? 18)}{" "}
+                  {selected.symbol} → {stakeUsdc} USDC
                 </p>
               ) : (
                 <p className="font-[family-name:var(--font-share-tech)] text-xs text-[var(--game-text-muted)]">

@@ -1,6 +1,11 @@
 "use client"
 
-import { gameTabActive, gameTabRow, gameLabel, gameMuted } from "@/components/game-ui"
+import {
+  gameTabActive,
+  gameTabRow,
+  gameLabel,
+  gameMuted,
+} from "@/components/game-ui"
 import { usePlayMode } from "@/components/play-mode-context"
 
 /** Sélecteur de mode hub — à placer dans le menu (pas de barre globale). */

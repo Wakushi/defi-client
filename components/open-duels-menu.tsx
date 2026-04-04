@@ -1,50 +1,50 @@
-"use client";
+"use client"
 
-import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import Link from "next/link"
+import { useCallback, useEffect, useState } from "react"
 
-import { gameBtnGhost, gameLabel, gameMuted } from "@/components/game-ui";
+import { gameBtnGhost, gameLabel, gameMuted } from "@/components/game-ui"
 
 type OpenDuelRow = {
-  id: string;
-  joinPath: string;
-  stakeUsdc: string;
-  playMode: "duel" | "friendly";
-  creatorPseudo: string;
-  opponentPseudo: string | null;
-  waitingForOpponent: boolean;
-  isLive: boolean;
-  updatedAt: string;
-};
+  id: string
+  joinPath: string
+  stakeUsdc: string
+  playMode: "duel" | "friendly"
+  creatorPseudo: string
+  opponentPseudo: string | null
+  waitingForOpponent: boolean
+  isLive: boolean
+  updatedAt: string
+}
 
 export function OpenDuelsMenu() {
-  const [duels, setDuels] = useState<OpenDuelRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [duels, setDuels] = useState<OpenDuelRow[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+    setLoading(true)
+    setError(null)
     try {
-      const r = await fetch("/api/duels", { credentials: "include" });
-      const data = (await r.json()) as { duels?: OpenDuelRow[]; error?: string };
+      const r = await fetch("/api/duels", { credentials: "include" })
+      const data = (await r.json()) as { duels?: OpenDuelRow[]; error?: string }
       if (!r.ok) {
-        setDuels([]);
-        setError(data.error ?? "Failed to load duels.");
-        return;
+        setDuels([])
+        setError(data.error ?? "Failed to load duels.")
+        return
       }
-      setDuels(Array.isArray(data.duels) ? data.duels : []);
+      setDuels(Array.isArray(data.duels) ? data.duels : [])
     } catch {
-      setDuels([]);
-      setError("Network error.");
+      setDuels([])
+      setError("Network error.")
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  }, []);
+  }, [])
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    void load()
+  }, [load])
 
   return (
     <div className="mt-6 border-t border-[var(--game-cyan-dim)]/50 pt-6">
@@ -67,7 +67,9 @@ export function OpenDuelsMenu() {
       ) : null}
 
       {loading ? (
-        <p className={`${gameMuted} font-[family-name:var(--font-orbitron)] text-xs uppercase tracking-wider`}>
+        <p
+          className={`${gameMuted} font-[family-name:var(--font-orbitron)] text-xs uppercase tracking-wider`}
+        >
           Loading…
         </p>
       ) : null}
@@ -83,7 +85,7 @@ export function OpenDuelsMenu() {
               ? "Waiting for opponent"
               : d.isLive
                 ? "Live"
-                : "Lobby";
+                : "Lobby"
             return (
               <li
                 key={d.id}
@@ -96,7 +98,8 @@ export function OpenDuelsMenu() {
                     {d.opponentPseudo ?? "—"}
                   </p>
                   <p className="mt-1 text-xs text-[var(--game-text-muted)]">
-                    {d.stakeUsdc} USDC · {d.playMode === "duel" ? "Duel" : "Friendly"} · {status}
+                    {d.stakeUsdc} USDC ·{" "}
+                    {d.playMode === "duel" ? "Duel" : "Friendly"} · {status}
                   </p>
                 </div>
                 <Link
@@ -106,10 +109,10 @@ export function OpenDuelsMenu() {
                   Open duel
                 </Link>
               </li>
-            );
+            )
           })}
         </ul>
       ) : null}
     </div>
-  );
+  )
 }

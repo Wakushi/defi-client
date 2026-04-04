@@ -1,6 +1,6 @@
-"use client";
+"use client"
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react"
 
 import {
   gameBtnGhost,
@@ -8,92 +8,100 @@ import {
   gameMuted,
   gamePanel,
   gamePanelTopAccent,
-} from "@/components/game-ui";
-import { usePlayMode } from "@/components/play-mode-context";
-import { WalletWithdrawModal } from "@/components/wallet-withdraw-modal";
-import type { MobulaPortfolioPayload, MobulaPortfolioPosition } from "@/types/mobula-portfolio";
+} from "@/components/game-ui"
+import { usePlayMode } from "@/components/play-mode-context"
+import { WalletWithdrawModal } from "@/components/wallet-withdraw-modal"
+import type {
+  MobulaPortfolioPayload,
+  MobulaPortfolioPosition,
+} from "@/types/mobula-portfolio"
 
 type Props = {
-  walletAddress: string;
-};
+  walletAddress: string
+}
 
 function formatUsd(n: number) {
-  if (!Number.isFinite(n)) return "—";
+  if (!Number.isFinite(n)) return "—"
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
     maximumFractionDigits: n >= 1 ? 2 : 6,
-  }).format(n);
+  }).format(n)
 }
 
 function formatTokenAmount(n: number, symbol: string) {
-  const maxFrac = n >= 1 ? 6 : 12;
+  const maxFrac = n >= 1 ? 6 : 12
   const s = new Intl.NumberFormat("en-US", {
     maximumFractionDigits: maxFrac,
-  }).format(n);
-  return `${s} ${symbol}`;
+  }).format(n)
+  return `${s} ${symbol}`
 }
 
 function shortAddress(addr: string) {
-  if (addr.length < 12) return addr;
-  return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
+  if (addr.length < 12) return addr
+  return `${addr.slice(0, 6)}…${addr.slice(-4)}`
 }
 
 export function WalletProfile({ walletAddress }: Props) {
-  const { playMode } = usePlayMode();
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [payload, setPayload] = useState<MobulaPortfolioPayload | null>(null);
-  const [withdrawOpen, setWithdrawOpen] = useState(false);
-  const [clipboardNotice, setClipboardNotice] = useState<string | null>(null);
+  const { playMode } = usePlayMode()
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [payload, setPayload] = useState<MobulaPortfolioPayload | null>(null)
+  const [withdrawOpen, setWithdrawOpen] = useState(false)
+  const [clipboardNotice, setClipboardNotice] = useState<string | null>(null)
 
   const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+    setLoading(true)
+    setError(null)
     try {
       const res = await fetch(
         `/api/wallet/portfolio?playMode=${encodeURIComponent(playMode)}`,
         { credentials: "include" },
-      );
-      const data = (await res.json()) as MobulaPortfolioPayload & { error?: string };
-      if (!res.ok) {
-        setPayload(null);
-        setError(data.error ?? "Failed to load portfolio.");
-        return;
+      )
+      const data = (await res.json()) as MobulaPortfolioPayload & {
+        error?: string
       }
-      setPayload(data);
+      if (!res.ok) {
+        setPayload(null)
+        setError(data.error ?? "Failed to load portfolio.")
+        return
+      }
+      setPayload(data)
     } catch {
-      setPayload(null);
-      setError("Network error.");
+      setPayload(null)
+      setError("Network error.")
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  }, [playMode]);
+  }, [playMode])
 
   useEffect(() => {
-    void load();
-  }, [load, walletAddress, playMode]);
+    void load()
+  }, [load, walletAddress, playMode])
 
   useEffect(() => {
-    if (!clipboardNotice) return;
-    const t = window.setTimeout(() => setClipboardNotice(null), 3200);
-    return () => window.clearTimeout(t);
-  }, [clipboardNotice]);
+    if (!clipboardNotice) return
+    const t = window.setTimeout(() => setClipboardNotice(null), 3200)
+    return () => window.clearTimeout(t)
+  }, [clipboardNotice])
 
   const copyWalletForDeposit = useCallback(async () => {
     try {
-      await navigator.clipboard.writeText(walletAddress.trim());
-      setClipboardNotice("Wallet address copied to clipboard.");
+      await navigator.clipboard.writeText(walletAddress.trim())
+      setClipboardNotice("Wallet address copied to clipboard.")
     } catch {
-      setClipboardNotice("Could not copy to clipboard.");
+      setClipboardNotice("Could not copy to clipboard.")
     }
-  }, [walletAddress]);
+  }, [walletAddress])
 
-  const canWithdraw =
-    Boolean(payload && payload.positions.length > 0 && !loading && !error);
+  const canWithdraw = Boolean(
+    payload && payload.positions.length > 0 && !loading && !error,
+  )
 
   return (
-    <div className={`${gamePanel} ${gamePanelTopAccent} relative overflow-hidden`}>
+    <div
+      className={`${gamePanel} ${gamePanelTopAccent} relative overflow-hidden`}
+    >
       <div className="border-b border-[var(--game-cyan-dim)] bg-[linear-gradient(135deg,rgba(65,245,240,0.08),rgba(255,61,154,0.06))] px-6 py-6 sm:px-8 sm:py-8">
         <p className={gameLabel}>Wallet</p>
         <p className="mt-1 font-[family-name:var(--font-share-tech)] text-sm text-[var(--game-cyan)]">
@@ -103,22 +111,33 @@ export function WalletProfile({ walletAddress }: Props) {
           Estimated total
         </p>
         <p className="mt-1 font-[family-name:var(--font-orbitron)] text-3xl font-black tabular-nums tracking-tight text-[var(--game-text)] [text-shadow:0_0_28px_rgba(65,245,240,0.25)] sm:text-4xl">
-          {loading ? "…" : payload ? formatUsd(payload.totalWalletBalanceUsd) : "—"}
+          {loading
+            ? "…"
+            : payload
+              ? formatUsd(payload.totalWalletBalanceUsd)
+              : "—"}
         </p>
         {payload?.mobulaSkippedReason === "friendly_hub_testnet_only" ? (
           <p className={`${gameMuted} mt-2 text-xs`}>
-            Friendly mode — balance limited to testnet collateral (Arbitrum Sepolia).
+            Friendly mode — balance limited to testnet collateral (Arbitrum
+            Sepolia).
           </p>
         ) : payload?.hubPlayMode === "duel" && payload.usedOnchainFallback ? (
           <p className={`${gameMuted} mt-2 text-xs`}>
             Duel mode — on-chain fallback (Mobula unavailable or empty).
           </p>
         ) : payload?.hubPlayMode === "duel" ? (
-          <p className={`${gameMuted} mt-2 text-xs`}>Duel mode — portfolio indexed via Mobula.</p>
+          <p className={`${gameMuted} mt-2 text-xs`}>
+            Duel mode — portfolio indexed via Mobula.
+          </p>
         ) : payload?.usedOnchainFallback ? (
-          <p className={`${gameMuted} mt-2 text-xs`}>On-chain collateral on faucet chain (testnet).</p>
+          <p className={`${gameMuted} mt-2 text-xs`}>
+            On-chain collateral on faucet chain (testnet).
+          </p>
         ) : (
-          <p className={`${gameMuted} mt-2 text-xs`}>Indexed via Mobula where configured.</p>
+          <p className={`${gameMuted} mt-2 text-xs`}>
+            Indexed via Mobula where configured.
+          </p>
         )}
       </div>
 
@@ -155,7 +174,9 @@ export function WalletProfile({ walletAddress }: Props) {
         </div>
 
         {loading ? (
-          <p className={`${gameMuted} font-[family-name:var(--font-orbitron)] text-xs uppercase tracking-wider`}>
+          <p
+            className={`${gameMuted} font-[family-name:var(--font-orbitron)] text-xs uppercase tracking-wider`}
+          >
             Syncing…
           </p>
         ) : null}
@@ -197,12 +218,16 @@ export function WalletProfile({ walletAddress }: Props) {
                   <p className="truncate font-[family-name:var(--font-orbitron)] text-xs font-bold uppercase tracking-wide text-[var(--game-text)]">
                     {p.symbol}
                   </p>
-                  <p className="truncate text-xs text-[var(--game-text-muted)]">{p.name}</p>
+                  <p className="truncate text-xs text-[var(--game-text-muted)]">
+                    {p.name}
+                  </p>
                   <p className="mt-2 font-[family-name:var(--font-share-tech)] text-sm text-[var(--game-cyan)]">
                     {formatTokenAmount(p.balance, p.symbol)}
                   </p>
                   {p.estimatedUsd > 0 ? (
-                    <p className="mt-0.5 text-xs text-[var(--game-text-muted)]">{formatUsd(p.estimatedUsd)}</p>
+                    <p className="mt-0.5 text-xs text-[var(--game-text-muted)]">
+                      {formatUsd(p.estimatedUsd)}
+                    </p>
                   ) : null}
                   <p className="mt-1 text-[10px] uppercase tracking-wider text-[var(--game-text-muted)]">
                     {p.chainLabel ?? `Chain ${p.chainId}`}
@@ -233,5 +258,5 @@ export function WalletProfile({ walletAddress }: Props) {
         </div>
       ) : null}
     </div>
-  );
+  )
 }

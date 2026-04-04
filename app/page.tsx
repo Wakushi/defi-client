@@ -1,5 +1,5 @@
-import { HomeAuth } from "@/components/home-auth";
-import { GameLogo } from "@/components/game-ui";
+import { HomeAuth } from "@/components/home-auth"
+import { GameLogo } from "@/components/game-ui"
 
 export default function Home() {
   return (
@@ -12,5 +12,5 @@ export default function Home() {
       </div>
       <HomeAuth />
     </main>
-  );
+  )
 }

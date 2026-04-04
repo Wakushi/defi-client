@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 
 import {
   gameBtnGhost,
@@ -106,12 +107,14 @@ export function WalletWithdrawModal({
 
   if (!open) return null;
 
+  if (typeof document === "undefined") return null;
+
   const explorer =
     txHash && resultChainId != null ? explorerTxUrl(resultChainId, txHash) : null;
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-[60] flex items-end justify-center bg-[rgba(4,2,12,0.82)] p-4 backdrop-blur-sm sm:items-center"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-[rgba(4,2,12,0.82)] p-4 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
       aria-labelledby="withdraw-modal-title"
@@ -256,6 +259,7 @@ export function WalletWithdrawModal({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
