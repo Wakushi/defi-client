@@ -28,6 +28,8 @@ type DuelApi = {
   createdAt: string;
   duelFull: boolean;
   viewer: { isCreator: boolean; isOpponent: boolean } | null;
+  duelLiveAt?: string | null;
+  duelClosedAt?: string | null;
 };
 
 type BalanceApi = {

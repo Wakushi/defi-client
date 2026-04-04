@@ -1,12 +1,18 @@
-"use client";
+"use client"
 
-import Link from "next/link";
-import { useParams } from "next/navigation";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import Link from "next/link"
+import { useParams } from "next/navigation"
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react"
 
-import { GainsLivePositionsPanel } from "@/components/gains-live-positions-panel";
-import { GainsPairPicker } from "@/components/gains-pair-picker";
-import { useGainsRealtime } from "@/components/gains-realtime-context";
+import { GainsLivePositionsPanel } from "@/components/gains-live-positions-panel"
+import { GainsPairPicker } from "@/components/gains-pair-picker"
+import { useGainsRealtime } from "@/components/gains-realtime-context"
 import {
   GameHudBar,
   GameLogo,
@@ -20,94 +26,107 @@ import {
   gamePanelTopAccent,
   gameSubtitle,
   gameTitle,
-} from "@/components/game-ui";
-import { duelVsBannerForViewer } from "@/lib/duel/viewer-vs-order";
-import { gainsPositionHistorySideKey, type GainsApiChain, type GainsTradingPair } from "@/types/gains-api";
-import type { DuelTradeSideConfig } from "@/types/duel-trade";
+} from "@/components/game-ui"
+import { duelVsBannerForViewer } from "@/lib/duel/viewer-vs-order"
+import {
+  gainsPositionHistorySideKey,
+  type GainsApiChain,
+  type GainsTradingPair,
+} from "@/types/gains-api"
+import type { DuelTradeSideConfig } from "@/types/duel-trade"
 
-const POLL_MS = 1000;
-const COUNTDOWN_TOTAL_MS = 3000;
+const POLL_MS = 1000
+const COUNTDOWN_TOTAL_MS = 3000
 
-function useDuelWsCountdown(serverSeconds: number | null, duelTimerEnded: boolean) {
-  const [tick, setTick] = useState<number | null>(null);
+function useDuelWsCountdown(
+  serverSeconds: number | null,
+  duelTimerEnded: boolean,
+) {
+  const [tick, setTick] = useState<number | null>(null)
   useEffect(() => {
     if (duelTimerEnded) {
-      setTick(0);
-      return;
+      setTick(0)
+      return
     }
     if (serverSeconds === null) {
-      setTick(null);
-      return;
+      setTick(null)
+      return
     }
     if (Number.isFinite(serverSeconds)) {
-      setTick(Math.max(0, serverSeconds));
+      setTick(Math.max(0, serverSeconds))
     }
-  }, [serverSeconds, duelTimerEnded]);
+  }, [serverSeconds, duelTimerEnded])
 
   useEffect(() => {
-    if (duelTimerEnded || tick === null || tick <= 0) return;
+    if (duelTimerEnded || tick === null || tick <= 0) return
     const id = setInterval(() => {
-      setTick((t) => (t != null && t > 0 ? t - 1 : t));
-    }, 1000);
-    return () => clearInterval(id);
-  }, [tick, duelTimerEnded]);
+      setTick((t) => (t != null && t > 0 ? t - 1 : t))
+    }, 1000)
+    return () => clearInterval(id)
+  }, [tick, duelTimerEnded])
 
-  if (duelTimerEnded) return 0;
-  return tick;
+  if (duelTimerEnded) return 0
+  return tick
 }
 
 type DuelPayload = {
-  id: string;
-  creatorPseudo: string;
-  opponentPseudo: string | null;
-  stakeUsdc: string;
-  durationSeconds: number;
-  duelFull: boolean;
-  viewer: { isCreator: boolean; isOpponent: boolean } | null;
-  readyState: [number, number];
-  readyBothAt: string | null;
-  bothReady: boolean;
-  myReady: boolean;
-  myTradeConfig: DuelTradeSideConfig | null;
-};
+  id: string
+  creatorPseudo: string
+  opponentPseudo: string | null
+  stakeUsdc: string
+  durationSeconds: number
+  duelFull: boolean
+  viewer: { isCreator: boolean; isOpponent: boolean } | null
+  readyState: [number, number]
+  readyBothAt: string | null
+  bothReady: boolean
+  myReady: boolean
+  myTradeConfig: DuelTradeSideConfig | null
+  /** Horodatage ISO du premier `start` persisté (GET + POST /live). */
+  duelLiveAt: string | null
+  /** Fin de chrono persistée (POST /close). */
+  duelClosedAt: string | null
+}
 
 function formatUsdc(raw: string) {
-  const n = Number(raw);
-  if (!Number.isFinite(n)) return raw;
+  const n = Number(raw)
+  if (!Number.isFinite(n)) return raw
   return new Intl.NumberFormat("en-US", {
     minimumFractionDigits: 0,
     maximumFractionDigits: 6,
-  }).format(n);
+  }).format(n)
 }
 
 function formatOutcomePct(n: number | null): string {
-  if (n == null || !Number.isFinite(n)) return "—";
-  const s = n >= 0 ? "+" : "";
-  return `${s}${n.toFixed(2)} %`;
+  if (n == null || !Number.isFinite(n)) return "—"
+  const s = n >= 0 ? "+" : ""
+  return `${s}${n.toFixed(2)} %`
 }
 
 function formatOutcomeUsdc(n: number | null): string {
-  if (n == null || !Number.isFinite(n)) return "—";
-  const s = n >= 0 ? "+" : "";
-  return `${s}${formatUsdc(String(n))} USDC`;
+  if (n == null || !Number.isFinite(n)) return "—"
+  const s = n >= 0 ? "+" : ""
+  return `${s}${formatUsdc(String(n))} USDC`
 }
 
 export function DuelPrepareView() {
-  const params = useParams();
-  const duelId = typeof params.id === "string" ? params.id : "";
+  const params = useParams()
+  const duelId = typeof params.id === "string" ? params.id : ""
 
-  const [duel, setDuel] = useState<DuelPayload | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [nowTick, setNowTick] = useState(() => Date.now());
+  const [duel, setDuel] = useState<DuelPayload | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [nowTick, setNowTick] = useState(() => Date.now())
 
-  const [pairIndex, setPairIndex] = useState(0);
-  const [gainsChain, setGainsChain] = useState<GainsApiChain>("Testnet");
-  const [selectedPairLabel, setSelectedPairLabel] = useState("");
+  const [pairIndex, setPairIndex] = useState(0)
+  const [gainsChain, setGainsChain] = useState<GainsApiChain>("Testnet")
+  const [selectedPairLabel, setSelectedPairLabel] = useState("")
   /** Prix API au clic sur une paire — envoyé au contrat comme `openPrice` (évite slippage / revert). */
-  const [selectedReferencePrice, setSelectedReferencePrice] = useState<number | null>(null);
-  const [leverageX, setLeverageX] = useState(10);
-  const [long, setLong] = useState(true);
+  const [selectedReferencePrice, setSelectedReferencePrice] = useState<
+    number | null
+  >(null)
+  const [leverageX, setLeverageX] = useState(10)
+  const [long, setLong] = useState(true)
 
   const {
     subscribePositions,
@@ -125,33 +144,38 @@ export function DuelPrepareView() {
     connectionState,
     lastWsError,
     walletAddress: gainsWallet,
-  } = useGainsRealtime();
+  } = useGainsRealtime()
 
-  const [duelAutoCloseBusy, setDuelAutoCloseBusy] = useState(false);
-  const [duelAutoCloseResult, setDuelAutoCloseResult] = useState<string | null>(null);
+  const [duelAutoCloseBusy, setDuelAutoCloseBusy] = useState(false)
+  const [duelAutoCloseResult, setDuelAutoCloseResult] = useState<string | null>(
+    null,
+  )
 
-  const duelCountdownDisplay = useDuelWsCountdown(duelRemainingSeconds, duelTimerEnded);
+  const duelCountdownDisplay = useDuelWsCountdown(
+    duelRemainingSeconds,
+    duelTimerEnded,
+  )
 
   useEffect(() => {
     if (!duelTimerEnded) {
-      setDuelAutoCloseBusy(false);
-      setDuelAutoCloseResult(null);
+      setDuelAutoCloseBusy(false)
+      setDuelAutoCloseResult(null)
     }
-  }, [duelTimerEnded]);
+  }, [duelTimerEnded])
 
   useLayoutEffect(() => {
-    if (!duelTimerEnded) return;
-    const batch = takeDuelEndCloseTargets();
-    if (!batch?.length) return;
+    if (!duelTimerEnded) return
+    const batch = takeDuelEndCloseTargets()
+    if (!batch?.length) return
 
-    setDuelAutoCloseBusy(true);
-    setDuelAutoCloseResult(null);
+    setDuelAutoCloseBusy(true)
+    setDuelAutoCloseResult(null)
 
     void (async () => {
-      const errs: string[] = [];
+      const errs: string[] = []
       for (const pos of batch) {
-        const mark = pos.currentPriceUsdDecimaled;
-        if (typeof mark !== "number" || !Number.isFinite(mark)) continue;
+        const mark = pos.currentPriceUsdDecimaled
+        if (typeof mark !== "number" || !Number.isFinite(mark)) continue
         try {
           const r = await fetch("/api/trade/close-market", {
             method: "POST",
@@ -161,142 +185,177 @@ export function DuelPrepareView() {
               tradeIndex: pos.index ?? 0,
               currentPriceUsdDecimaled: mark,
             }),
-          });
-          const data = (await r.json()) as { error?: string };
+          })
+          const data = (await r.json()) as { error?: string }
           if (!r.ok) {
-            errs.push(`#${pos.index ?? "?"}: ${data.error ?? "échec"}`);
+            errs.push(`#${pos.index ?? "?"}: ${data.error ?? "échec"}`)
           }
         } catch {
-          errs.push(`#${pos.index ?? "?"}: réseau`);
+          errs.push(`#${pos.index ?? "?"}: réseau`)
         }
       }
-      setDuelAutoCloseBusy(false);
+      setDuelAutoCloseBusy(false)
       if (errs.length > 0) {
         setDuelAutoCloseResult(
           `Fermeture auto partielle ou en erreur — ${errs.join(" · ")}. Tu peux réessayer à la main depuis les cartes.`,
-        );
+        )
       } else {
-        setDuelAutoCloseResult("Toutes tes positions du duel ont été fermées au marché.");
+        setDuelAutoCloseResult(
+          "Toutes tes positions du duel ont été fermées au marché.",
+        )
       }
-    })();
-  }, [duelTimerEnded, takeDuelEndCloseTargets]);
+    })()
+  }, [duelTimerEnded, takeDuelEndCloseTargets])
 
-  const [readyLoading, setReadyLoading] = useState(false);
-  const [readyError, setReadyError] = useState<string | null>(null);
+  const [readyLoading, setReadyLoading] = useState(false)
+  const [readyError, setReadyError] = useState<string | null>(null)
 
-  const [execLoading, setExecLoading] = useState(false);
-  const [execError, setExecError] = useState<string | null>(null);
-  const [txHash, setTxHash] = useState<string | null>(null);
-  /** Single auto attempt after countdown (avoids double submit). */
-  const autoSignStartedRef = useRef(false);
-  const txHashRef = useRef(txHash);
-  const onExecuteRef = useRef<() => Promise<void>>(async () => {});
-  txHashRef.current = txHash;
+  const [execLoading, setExecLoading] = useState(false)
+  const [execError, setExecError] = useState<string | null>(null)
+  const [txHash, setTxHash] = useState<string | null>(null)
+  /** Une seule auto-signature quand les deux sont prêts (pas liée à l’event WS `start`). */
+  const autoSignStartedRef = useRef(false)
+  const closedPostedRef = useRef(false)
+  const txHashRef = useRef(txHash)
+  const onExecuteRef = useRef<() => Promise<void>>(async () => {})
+  txHashRef.current = txHash
 
   const loadDuel = useCallback(async () => {
-    if (!duelId) return;
-    setLoadError(null);
+    if (!duelId) return
+    setLoadError(null)
     try {
-      const r = await fetch(`/api/duels/${duelId}`, { credentials: "include" });
-      const data = (await r.json()) as DuelPayload & { error?: string };
+      const r = await fetch(`/api/duels/${duelId}`, { credentials: "include" })
+      const data = (await r.json()) as DuelPayload & { error?: string }
       if (!r.ok) {
-        setDuel(null);
-        setLoadError(data.error ?? "Duel not found.");
-        return;
+        setDuel(null)
+        setLoadError(data.error ?? "Duel not found.")
+        return
       }
-      setDuel(data);
+      setDuel(data)
       if (data.myTradeConfig) {
-        setPairIndex(data.myTradeConfig.pairIndex);
-        setLeverageX(data.myTradeConfig.leverageX);
-        setLong(data.myTradeConfig.long);
-        setSelectedPairLabel(`Pair #${data.myTradeConfig.pairIndex}`);
+        setPairIndex(data.myTradeConfig.pairIndex)
+        setLeverageX(data.myTradeConfig.leverageX)
+        setLong(data.myTradeConfig.long)
+        setSelectedPairLabel(`Pair #${data.myTradeConfig.pairIndex}`)
         setSelectedReferencePrice(
           typeof data.myTradeConfig.referencePrice === "number" &&
             Number.isFinite(data.myTradeConfig.referencePrice)
             ? data.myTradeConfig.referencePrice
             : null,
-        );
+        )
       }
     } catch {
-      setDuel(null);
-      setLoadError("Network error.");
+      setDuel(null)
+      setLoadError("Network error.")
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  }, [duelId]);
+  }, [duelId])
 
   useEffect(() => {
-    void loadDuel();
-  }, [loadDuel]);
+    void loadDuel()
+  }, [loadDuel])
 
   useEffect(() => {
-    autoSignStartedRef.current = false;
-  }, [duelId]);
+    autoSignStartedRef.current = false
+    closedPostedRef.current = false
+  }, [duelId])
+
+  /** Persiste « duel live » côté serveur dès réception du WS `start` (reload sans ré-attendre). */
+  useEffect(() => {
+    if (duelStartSignalAt == null || !duelId) return
+    void fetch(`/api/duels/${duelId}/live`, {
+      method: "POST",
+      credentials: "include",
+    }).then((r) => {
+      if (r.ok) void loadDuel()
+    })
+  }, [duelStartSignalAt, duelId, loadDuel])
+
+  /** Persiste la fin du chrono duel en base (état « fermé »). */
+  useEffect(() => {
+    if (!duelTimerEnded || !duelId || closedPostedRef.current) return
+    closedPostedRef.current = true
+    void fetch(`/api/duels/${duelId}/close`, {
+      method: "POST",
+      credentials: "include",
+    }).then((r) => {
+      if (r.ok) void loadDuel()
+    })
+  }, [duelTimerEnded, duelId, loadDuel])
 
   const participant =
-    duel?.viewer && (duel.viewer.isCreator || duel.viewer.isOpponent);
+    duel?.viewer && (duel.viewer.isCreator || duel.viewer.isOpponent)
 
   /** Booléen dérivé : évite un tableau de deps dont la « forme » change (warning React / Fast Refresh). */
   const shouldPollDuel =
-    Boolean(duel?.duelFull) && Boolean(participant) && !duel?.bothReady;
+    Boolean(duel?.duelFull) && Boolean(participant) && !duel?.bothReady
 
-  /** Tant que les deux ne sont pas « ready », on resynchronise l’état (l’autre joueur peut marquer prêt). Après `bothReady`, compte à rebours + sign local — plus de requêtes périodiques. */
+  /** Tant que les deux ne sont pas « ready », on resynchronise l’état (l’autre joueur peut marquer prêt). Après `bothReady`, plus de poll — ouverture auto + WS. */
   useEffect(() => {
-    if (!shouldPollDuel) return;
+    if (!shouldPollDuel) return
 
-    const id = setInterval(() => void loadDuel(), POLL_MS);
-    return () => clearInterval(id);
-  }, [shouldPollDuel, loadDuel]);
-
-  useEffect(() => {
-    if (duelStartSignalAt != null) setNowTick(Date.now());
-  }, [duelStartSignalAt]);
-
-  /** Rafraîchit l’horloge pendant le 3-2-1 après l’event WebSocket `start`. */
-  useEffect(() => {
-    if (!duel?.bothReady || duelStartSignalAt == null || txHash) return;
-    const elapsed = Date.now() - duelStartSignalAt;
-    if (elapsed >= COUNTDOWN_TOTAL_MS) return;
-    const id = setInterval(() => setNowTick(Date.now()), 100);
-    return () => clearInterval(id);
-  }, [duel?.bothReady, duelStartSignalAt, txHash]);
+    const id = setInterval(() => void loadDuel(), POLL_MS)
+    return () => clearInterval(id)
+  }, [shouldPollDuel, loadDuel])
 
   useEffect(() => {
-    if (!duel?.bothReady || !participant || !duelId) return;
-    subscribePositions(duelId);
-  }, [duel?.bothReady, participant, duelId, subscribePositions]);
+    if (duelStartSignalAt != null) setNowTick(Date.now())
+  }, [duelStartSignalAt])
 
+  /** Compte à rebours 3-2-1 **uniquement** après `start` (affichage — indépendant de l’ouverture du trade). */
+  const serverPastStartGate = Boolean(duel?.duelLiveAt || duel?.duelClosedAt)
+
+  useEffect(() => {
+    if (!duel?.bothReady || duelStartSignalAt == null || serverPastStartGate)
+      return
+    const elapsed = Date.now() - duelStartSignalAt
+    if (elapsed >= COUNTDOWN_TOTAL_MS) return
+    const id = setInterval(() => setNowTick(Date.now()), 100)
+    return () => clearInterval(id)
+  }, [duel?.bothReady, duelStartSignalAt, serverPastStartGate])
+
+  useEffect(() => {
+    if (!duel?.bothReady || !participant || !duelId) return
+    subscribePositions(duelId)
+  }, [duel?.bothReady, participant, duelId, subscribePositions])
+
+  const hasLocalStart = duelStartSignalAt != null
   const prepElapsed =
-    duel?.bothReady === true && duelStartSignalAt != null
+    duel?.bothReady === true && hasLocalStart
       ? Math.max(0, nowTick - duelStartSignalAt)
-      : 0;
+      : 0
 
   const prepOverlayNum =
     duel?.bothReady === true &&
-    duelStartSignalAt != null &&
+    !serverPastStartGate &&
+    hasLocalStart &&
     prepElapsed < COUNTDOWN_TOTAL_MS
       ? Math.max(1, 3 - Math.floor(prepElapsed / 1000))
-      : null;
+      : null
 
+  /** Après la fin du 3-2-1 post-`start`, ou déjà « live » en base au reload. */
   const prepCountdownDone = Boolean(
     duel?.bothReady === true &&
-      duelStartSignalAt != null &&
-      prepElapsed >= COUNTDOWN_TOTAL_MS,
-  );
+      (serverPastStartGate ||
+        (hasLocalStart && prepElapsed >= COUNTDOWN_TOTAL_MS)),
+  )
 
   const waitingWsStart =
-    duel?.bothReady === true && duelStartSignalAt == null && !txHash;
+    duel?.bothReady === true &&
+    !serverPastStartGate &&
+    duelStartSignalAt == null
 
   useLayoutEffect(() => {
-    if (!duel?.bothReady || !prepCountdownDone || txHash || autoSignStartedRef.current) return;
-    autoSignStartedRef.current = true;
-    void onExecuteRef.current();
-  }, [duel?.bothReady, prepCountdownDone, txHash]);
+    if (!duel?.bothReady || txHash || autoSignStartedRef.current) return
+    autoSignStartedRef.current = true
+    void onExecuteRef.current()
+  }, [duel?.bothReady, txHash])
 
   async function onMarkReady() {
-    if (!duelId) return;
-    setReadyError(null);
-    setReadyLoading(true);
+    if (!duelId) return
+    setReadyError(null)
+    setReadyLoading(true)
     try {
       const res = await fetch(`/api/duels/${duelId}/trade-ready`, {
         method: "POST",
@@ -307,56 +366,57 @@ export function DuelPrepareView() {
           leverageX,
           long,
           tradeType: 0,
-          ...(selectedReferencePrice != null && Number.isFinite(selectedReferencePrice)
+          ...(selectedReferencePrice != null &&
+          Number.isFinite(selectedReferencePrice)
             ? { referencePrice: selectedReferencePrice }
             : {}),
         } satisfies DuelTradeSideConfig),
-      });
-      const data = (await res.json()) as { error?: string };
+      })
+      const data = (await res.json()) as { error?: string }
       if (!res.ok) {
-        setReadyError(data.error ?? "Failed.");
-        return;
+        setReadyError(data.error ?? "Failed.")
+        return
       }
-      await loadDuel();
+      await loadDuel()
     } catch {
-      setReadyError("Network error.");
+      setReadyError("Network error.")
     } finally {
-      setReadyLoading(false);
+      setReadyLoading(false)
     }
   }
 
   const onExecute = useCallback(async () => {
-    if (!duelId) return;
-    subscribePositions(duelId);
-    setExecError(null);
-    setExecLoading(true);
+    if (!duelId) return
+    subscribePositions(duelId)
+    setExecError(null)
+    setExecLoading(true)
     try {
       const res = await fetch(`/api/duels/${duelId}/execute-trade`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({}),
-      });
-      const data = (await res.json()) as { error?: string; txHash?: string };
+      })
+      const data = (await res.json()) as { error?: string; txHash?: string }
       if (!res.ok) {
-        setExecError(data.error ?? "Failed.");
-        return;
+        setExecError(data.error ?? "Failed.")
+        return
       }
       if (data.txHash) {
-        setTxHash(data.txHash);
+        setTxHash(data.txHash)
       }
     } catch {
-      setExecError("Network error.");
+      setExecError("Network error.")
     } finally {
-      setExecLoading(false);
+      setExecLoading(false)
     }
-  }, [duelId, subscribePositions]);
+  }, [duelId, subscribePositions])
 
-  onExecuteRef.current = onExecute;
+  onExecuteRef.current = onExecute
 
   function onRetrySign() {
-    autoSignStartedRef.current = false;
-    void onExecute();
+    autoSignStartedRef.current = false
+    void onExecute()
   }
 
   if (!duelId) {
@@ -365,9 +425,11 @@ export function DuelPrepareView() {
         <GameHudBar>
           <GameLogo className="!text-sm" />
         </GameHudBar>
-        <p className="p-8 text-sm text-[var(--game-danger)]">Missing duel id.</p>
+        <p className="p-8 text-sm text-[var(--game-danger)]">
+          Missing duel id.
+        </p>
       </>
-    );
+    )
   }
 
   if (loading) {
@@ -379,12 +441,14 @@ export function DuelPrepareView() {
           </Link>
         </GameHudBar>
         <main className="mx-auto max-w-lg flex-1 px-4 py-16">
-          <p className={`${gameMuted} font-[family-name:var(--font-orbitron)] text-xs uppercase tracking-widest`}>
+          <p
+            className={`${gameMuted} font-[family-name:var(--font-orbitron)] text-xs uppercase tracking-widest`}
+          >
             Loading…
           </p>
         </main>
       </>
-    );
+    )
   }
 
   if (loadError || !duel) {
@@ -396,13 +460,15 @@ export function DuelPrepareView() {
           </Link>
         </GameHudBar>
         <main className="mx-auto max-w-lg flex-1 space-y-4 px-4 py-16">
-          <p className="text-sm text-[var(--game-danger)]">{loadError ?? "Not found."}</p>
+          <p className="text-sm text-[var(--game-danger)]">
+            {loadError ?? "Not found."}
+          </p>
           <Link href="/" className={gameLink}>
             Back to hub
           </Link>
         </main>
       </>
-    );
+    )
   }
 
   if (!duel.duelFull) {
@@ -420,7 +486,7 @@ export function DuelPrepareView() {
           </Link>
         </main>
       </>
-    );
+    )
   }
 
   if (!participant) {
@@ -438,7 +504,7 @@ export function DuelPrepareView() {
           </Link>
         </main>
       </>
-    );
+    )
   }
 
   const duelVsSides = duelVsBannerForViewer(
@@ -446,16 +512,16 @@ export function DuelPrepareView() {
     duel.opponentPseudo,
     duel.viewer,
     "—",
-  );
+  )
 
   const myTradePseudo =
     duel.viewer?.isCreator === true
       ? duel.creatorPseudo
-      : duel.opponentPseudo ?? "—";
+      : (duel.opponentPseudo ?? "—")
   const opponentTradePseudo =
     duel.viewer?.isCreator === true
-      ? duel.opponentPseudo ?? "—"
-      : duel.creatorPseudo;
+      ? (duel.opponentPseudo ?? "—")
+      : duel.creatorPseudo
 
   return (
     <>
@@ -481,24 +547,40 @@ export function DuelPrepareView() {
             rightTag={duelVsSides.rightTag}
           />
           <p className={gameMuted}>
-            Stake: {formatUsdc(duel.stakeUsdc)} USDC each · duration {Math.round(duel.durationSeconds / 60)} min
+            Stake: {formatUsdc(duel.stakeUsdc)} USDC each · duration{" "}
+            {Math.round(duel.durationSeconds / 60)} min
           </p>
         </div>
 
-        <div className={`${gamePanel} ${gamePanelTopAccent} space-y-3 p-6 text-sm`}>
+        <div
+          className={`${gamePanel} ${gamePanelTopAccent} space-y-3 p-6 text-sm`}
+        >
           <p className="font-[family-name:var(--font-share-tech)] text-[var(--game-cyan)]">
             Ready status [{duel.readyState[0]}, {duel.readyState[1]}]{" "}
-            <span className="text-[var(--game-text-muted)]">· creator, opponent</span>
+            <span className="text-[var(--game-text-muted)]">
+              · creator, opponent
+            </span>
           </p>
           <p className={gameMuted}>
-            Quand les deux sont prêts, le serveur envoie{" "}
-            <span className="font-semibold text-[var(--game-cyan)]">start</span> sur le WebSocket, puis compte à
-            rebours <span className="font-semibold text-[var(--game-magenta)]">3 · 2 · 1</span> et signature auto.
+            Dès que les deux sont prêts, ta position s’ouvre avec{" "}
+            <span className="font-semibold text-[var(--game-magenta)]">
+              signature auto
+            </span>
+            . Au signal WebSocket{" "}
+            <span className="font-semibold text-[var(--game-cyan)]">start</span>
+            , compte à rebours{" "}
+            <span className="font-semibold text-[var(--game-magenta)]">
+              3 · 2 · 1
+            </span>{" "}
+            plein écran — les positions live et le chrono du duel n’apparaissent
+            qu’après.
           </p>
         </div>
 
         {duel.bothReady ? (
           <div className="space-y-4">
+            {prepCountdownDone ? (
+              <>
             <div
               className={`${gamePanel} ${gamePanelTopAccent} flex flex-wrap items-center justify-between gap-3 p-4`}
             >
@@ -521,8 +603,9 @@ export function DuelPrepareView() {
                 </p>
               </div>
               <p className={`${gameMuted} max-w-md text-[11px]`}>
-                Les positions se mettent à jour en direct. Quand le chrono tombe à 0, tes positions sont fermées au marché
-                automatiquement (une transaction par trade).
+                Les positions se mettent à jour en direct. Quand le chrono tombe
+                à 0, tes positions sont fermées au marché automatiquement (une
+                transaction par trade).
               </p>
             </div>
 
@@ -558,8 +641,11 @@ export function DuelPrepareView() {
                 </h2>
                 <p className={`${gameMuted} text-[12px]`}>
                   Classement sur le{" "}
-                  <span className="font-semibold text-[var(--game-text)]">PnL en %</span> au dernier tick à ~1 s (ou dernier %
-                  connu si la position a été fermée avant la fin).
+                  <span className="font-semibold text-[var(--game-text)]">
+                    PnL en %
+                  </span>{" "}
+                  au dernier tick à ~1 s (ou dernier % connu si la position a
+                  été fermée avant la fin).
                 </p>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="rounded-sm border border-[var(--game-cyan-dim)]/50 bg-[rgba(0,0,0,0.35)] p-4">
@@ -583,7 +669,8 @@ export function DuelPrepareView() {
                       {formatOutcomePct(duelPnlOutcome.opponentPnlPct)}
                     </p>
                     <p className="mt-1 font-[family-name:var(--font-share-tech)] text-xs text-[var(--game-text-muted)]">
-                      PnL USDC : {formatOutcomeUsdc(duelPnlOutcome.opponentPnlUsdc)}
+                      PnL USDC :{" "}
+                      {formatOutcomeUsdc(duelPnlOutcome.opponentPnlUsdc)}
                     </p>
                   </div>
                 </div>
@@ -594,17 +681,21 @@ export function DuelPrepareView() {
               <div
                 className={`rounded-sm border px-4 py-3 text-sm ${
                   duelAutoCloseResult != null &&
-                  (duelAutoCloseResult.includes("partielle") || duelAutoCloseResult.includes("erreur"))
+                  (duelAutoCloseResult.includes("partielle") ||
+                    duelAutoCloseResult.includes("erreur"))
                     ? "border-[var(--game-danger)]/50 bg-[rgba(255,80,80,0.08)] text-[var(--game-text)]"
                     : "border-[var(--game-cyan)]/40 bg-[rgba(65,245,240,0.08)] text-[var(--game-text)]"
                 }`}
               >
                 {duelAutoCloseBusy ? (
                   <p className="font-[family-name:var(--font-share-tech)] text-[13px] text-[var(--game-text)]">
-                    Fermeture automatique des positions au marché (une transaction par trade)…
+                    Fermeture automatique des positions au marché (une
+                    transaction par trade)…
                   </p>
                 ) : duelAutoCloseResult ? (
-                  <p className="font-[family-name:var(--font-share-tech)] text-[13px]">{duelAutoCloseResult}</p>
+                  <p className="font-[family-name:var(--font-share-tech)] text-[13px]">
+                    {duelAutoCloseResult}
+                  </p>
                 ) : null}
               </div>
             ) : null}
@@ -624,7 +715,9 @@ export function DuelPrepareView() {
                   showConnectionMeta
                   positions={myPositions}
                   pnlHistoryByKey={pnlHistoryMy}
-                  historyKeyForPosition={(p) => gainsPositionHistorySideKey("my", p)}
+                  historyKeyForPosition={(p) =>
+                    gainsPositionHistorySideKey("my", p)
+                  }
                   connectionState={connectionState}
                   lastWsError={lastWsError}
                   gainsWallet={gainsWallet}
@@ -647,7 +740,9 @@ export function DuelPrepareView() {
                   showConnectionMeta={false}
                   positions={opponentPositions}
                   pnlHistoryByKey={pnlHistoryOpponent}
-                  historyKeyForPosition={(p) => gainsPositionHistorySideKey("opponent", p)}
+                  historyKeyForPosition={(p) =>
+                    gainsPositionHistorySideKey("opponent", p)
+                  }
                   connectionState={connectionState}
                   lastWsError={lastWsError}
                   gainsWallet={gainsWallet}
@@ -657,6 +752,8 @@ export function DuelPrepareView() {
                 />
               </div>
             </div>
+              </>
+            ) : null}
           </div>
         ) : (
           <GainsLivePositionsPanel
@@ -678,24 +775,27 @@ export function DuelPrepareView() {
             <div className="space-y-2">
               <span className={gameLabel}>Trading pair</span>
               <p className={`${gameMuted} text-xs`}>
-                Tap a row to set <span className="text-[var(--game-cyan)]">pair + live price</span> for
-                on-chain open (avoids stale demo price reverts).
+                Tap a row to set{" "}
+                <span className="text-[var(--game-cyan)]">
+                  pair + live price
+                </span>{" "}
+                for on-chain open (avoids stale demo price reverts).
               </p>
               <GainsPairPicker
                 chain={gainsChain}
                 onChainChange={(c) => {
-                  setGainsChain(c);
-                  setPairIndex(0);
-                  setSelectedPairLabel("");
-                  setSelectedReferencePrice(null);
+                  setGainsChain(c)
+                  setPairIndex(0)
+                  setSelectedPairLabel("")
+                  setSelectedReferencePrice(null)
                 }}
                 selectedPairIndex={pairIndex}
                 onSelectPair={(p: GainsTradingPair) => {
-                  setPairIndex(p.pairIndex);
-                  setSelectedPairLabel(p.name);
+                  setPairIndex(p.pairIndex)
+                  setSelectedPairLabel(p.name)
                   setSelectedReferencePrice(
                     Number.isFinite(p.price) && p.price > 0 ? p.price : null,
-                  );
+                  )
                 }}
               />
             </div>
@@ -706,7 +806,9 @@ export function DuelPrepareView() {
                 min={1}
                 max={500}
                 value={leverageX}
-                onChange={(e) => setLeverageX(Number.parseInt(e.target.value, 10) || 1)}
+                onChange={(e) =>
+                  setLeverageX(Number.parseInt(e.target.value, 10) || 1)
+                }
                 className={gameInput}
               />
             </label>
@@ -737,20 +839,19 @@ export function DuelPrepareView() {
               Ready locked in
             </p>
             <p className={`${gameMuted} mt-1`}>
-              {selectedPairLabel || `Pair #${pairIndex}`} · {gainsChain} · {leverageX}× ·{" "}
-              {long ? "Long" : "Short"}
+              {selectedPairLabel || `Pair #${pairIndex}`} · {gainsChain} ·{" "}
+              {leverageX}× · {long ? "Long" : "Short"}
               {selectedReferencePrice != null ? (
-                <>
-                  {" "}
-                  · ref price {selectedReferencePrice}
-                </>
+                <> · ref price {selectedReferencePrice}</>
               ) : null}
             </p>
           </div>
         )}
 
         {duel.myReady && !duel.bothReady ? (
-          <p className={`${gameMuted} font-[family-name:var(--font-orbitron)] text-xs uppercase tracking-[0.2em] text-[var(--game-amber)]`}>
+          <p
+            className={`${gameMuted} font-[family-name:var(--font-orbitron)] text-xs uppercase tracking-[0.2em] text-[var(--game-amber)]`}
+          >
             Waiting for opponent…
           </p>
         ) : null}
@@ -764,13 +865,18 @@ export function DuelPrepareView() {
             <p className="font-[family-name:var(--font-orbitron)] text-[10px] font-bold uppercase tracking-[0.35em] text-[var(--game-cyan)]">
               En attente du signal serveur
             </p>
-            <p className={`${gameMuted} mt-2 max-w-xs px-4 text-center text-[11px]`}>
+            <p
+              className={`${gameMuted} mt-2 max-w-xs px-4 text-center text-[11px]`}
+            >
               Les deux joueurs sont prêts. Connexion WebSocket :{" "}
-              <span className="font-semibold text-[var(--game-text)]">{connectionState}</span>
+              <span className="font-semibold text-[var(--game-text)]">
+                {connectionState}
+              </span>
               {connectionState !== "open" ? (
                 <>
                   {" "}
-                  — ouvre la préparation avec un wallet connecté pour t’abonner au duel.
+                  — ouvre la préparation avec un wallet connecté pour t’abonner
+                  au duel.
                 </>
               ) : null}
             </p>
@@ -778,27 +884,28 @@ export function DuelPrepareView() {
         ) : null}
 
         {duel.bothReady && prepOverlayNum !== null ? (
-          <div className="game-countdown-overlay fixed inset-0 z-50 flex flex-col items-center justify-center">
+          <div className="game-countdown-overlay fixed inset-0 z-50 flex flex-col items-center justify-center backdrop-blur-sm">
             <p className="mb-6 font-[family-name:var(--font-orbitron)] text-[10px] font-black uppercase tracking-[0.5em] text-[var(--game-magenta)] [text-shadow:0_0_16px_rgba(255,61,154,0.6)]">
               Engage
             </p>
             <p className="game-countdown-num tabular-nums">{prepOverlayNum}</p>
             <p className="mt-8 font-[family-name:var(--font-orbitron)] text-[10px] font-bold uppercase tracking-[0.35em] text-[var(--game-text-muted)]">
-              Ouverture des positions
+              Synchro duel
             </p>
           </div>
         ) : null}
 
-        {duel.bothReady && prepCountdownDone ? (
-          <div className={`${gamePanel} ${gamePanelTopAccent} space-y-4 p-6`}>
+        {duel.bothReady &&
+        (execError ||
+          (prepCountdownDone && (txHash || execLoading))) ? (
+          <div
+            className={`${gamePanel} ${gamePanelTopAccent} relative z-[45] space-y-4 p-6`}
+          >
             <h2 className="font-[family-name:var(--font-orbitron)] text-sm font-bold uppercase text-[var(--game-amber)]">
               Trade launch
             </h2>
             {execLoading && !txHash ? (
-              <p className={gameMuted}>Signing in progress…</p>
-            ) : null}
-            {!execLoading && !txHash && !execError ? (
-              <p className={gameMuted}>Auto-starting…</p>
+              <p className={gameMuted}>Signature en cours…</p>
             ) : null}
             {execError ? (
               <div className="space-y-3">
@@ -826,5 +933,5 @@ export function DuelPrepareView() {
         </Link>
       </main>
     </>
-  );
+  )
 }

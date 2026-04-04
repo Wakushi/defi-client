@@ -1,51 +1,50 @@
-import { type NextRequest, NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server"
 
-import { getSessionFromRequest } from "@/lib/auth/session";
-import { parseDuelTradeConfig, parseReadyState } from "@/lib/db/duel-ready";
-import { findDuelWithPseudos } from "@/lib/db/duels";
-import { findUserById } from "@/lib/db/users";
+import { getSessionFromRequest } from "@/lib/auth/session"
+import { parseDuelTradeConfig, parseReadyState } from "@/lib/db/duel-ready"
+import { findDuelWithPseudos } from "@/lib/db/duels"
+import { findUserById } from "@/lib/db/users"
 
-export const runtime = "nodejs";
+export const runtime = "nodejs"
 
 const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 export async function GET(
   request: NextRequest,
   context: { params: Promise<{ id: string }> },
 ) {
-  const { id } = await context.params;
+  const { id } = await context.params
   if (!UUID_RE.test(id)) {
-    return NextResponse.json({ error: "Invalid duel id." }, { status: 400 });
+    return NextResponse.json({ error: "Invalid duel id." }, { status: 400 })
   }
 
-  const duel = await findDuelWithPseudos(id);
+  const duel = await findDuelWithPseudos(id)
   if (!duel) {
-    return NextResponse.json({ error: "Duel not found." }, { status: 404 });
+    return NextResponse.json({ error: "Duel not found." }, { status: 404 })
   }
 
-  let viewer: { isCreator: boolean; isOpponent: boolean } | null = null;
-  const session = await getSessionFromRequest(request);
+  let viewer: { isCreator: boolean; isOpponent: boolean } | null = null
+  const session = await getSessionFromRequest(request)
   if (session) {
-    const user = await findUserById(session.userId);
+    const user = await findUserById(session.userId)
     if (user && user.pseudo === session.pseudo) {
       viewer = {
         isCreator: user.id === duel.creator_id,
-        isOpponent:
-          duel.opponent_id !== null && user.id === duel.opponent_id,
-      };
+        isOpponent: duel.opponent_id !== null && user.id === duel.opponent_id,
+      }
     }
   }
 
-  const readyState = parseReadyState(duel.ready_state);
-  let myTradeConfig = null;
-  let myReady = false;
+  const readyState = parseReadyState(duel.ready_state)
+  let myTradeConfig = null
+  let myReady = false
   if (viewer?.isCreator) {
-    myTradeConfig = parseDuelTradeConfig(duel.creator_trade_config);
-    myReady = readyState[0] === 1;
+    myTradeConfig = parseDuelTradeConfig(duel.creator_trade_config)
+    myReady = readyState[0] === 1
   } else if (viewer?.isOpponent) {
-    myTradeConfig = parseDuelTradeConfig(duel.opponent_trade_config);
-    myReady = readyState[1] === 1;
+    myTradeConfig = parseDuelTradeConfig(duel.opponent_trade_config)
+    myReady = readyState[1] === 1
   }
 
   const readyBothAt =
@@ -53,7 +52,21 @@ export async function GET(
       ? duel.ready_both_at.toISOString()
       : duel.ready_both_at
         ? new Date(duel.ready_both_at as string).toISOString()
-        : null;
+        : null
+
+  const duelLiveAt =
+    duel.duel_live_at instanceof Date
+      ? duel.duel_live_at.toISOString()
+      : duel.duel_live_at
+        ? new Date(duel.duel_live_at as string).toISOString()
+        : null
+
+  const duelClosedAt =
+    duel.duel_closed_at instanceof Date
+      ? duel.duel_closed_at.toISOString()
+      : duel.duel_closed_at
+        ? new Date(duel.duel_closed_at as string).toISOString()
+        : null
 
   return NextResponse.json({
     id: duel.id,
@@ -69,5 +82,7 @@ export async function GET(
     bothReady: readyState[0] === 1 && readyState[1] === 1,
     myReady,
     myTradeConfig,
-  });
+    duelLiveAt,
+    duelClosedAt,
+  })
 }

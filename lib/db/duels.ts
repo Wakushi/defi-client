@@ -1,10 +1,10 @@
-import { getDb } from "./index";
-import { findUserById } from "./users";
+import { getDb } from "./index"
+import { findUserById } from "./users"
 
 export async function insertDuel(input: {
-  creatorId: string;
-  stakeUsdc: string;
-  durationSeconds: number;
+  creatorId: string
+  stakeUsdc: string
+  durationSeconds: number
 }) {
   return getDb()
     .insertInto("duels")
@@ -15,7 +15,7 @@ export async function insertDuel(input: {
       duration_seconds: input.durationSeconds,
     })
     .returning("id")
-    .executeTakeFirstOrThrow();
+    .executeTakeFirstOrThrow()
 }
 
 export async function findDuelById(id: string) {
@@ -23,21 +23,21 @@ export async function findDuelById(id: string) {
     .selectFrom("duels")
     .selectAll()
     .where("id", "=", id)
-    .executeTakeFirst();
+    .executeTakeFirst()
 }
 
 export async function findDuelWithPseudos(id: string) {
-  const duel = await findDuelById(id);
-  if (!duel) return null;
-  const creator = await findUserById(duel.creator_id);
+  const duel = await findDuelById(id)
+  if (!duel) return null
+  const creator = await findUserById(duel.creator_id)
   const opponent = duel.opponent_id
     ? await findUserById(duel.opponent_id)
-    : null;
+    : null
   return {
     ...duel,
     creator_pseudo: creator?.pseudo ?? "?",
     opponent_pseudo: opponent?.pseudo ?? null,
-  };
+  }
 }
 
 /** Définit l’adversaire si la place est encore libre (une seule ligne mise à jour). */
@@ -50,9 +50,28 @@ export async function setDuelOpponent(duelId: string, opponentUserId: string) {
     })
     .where("id", "=", duelId)
     .where("opponent_id", "is", null)
-    .executeTakeFirst();
+    .executeTakeFirst()
 
-  const n = result.numUpdatedRows;
-  const count = typeof n === "bigint" ? Number(n) : Number(n);
-  return count > 0;
+  const n = result.numUpdatedRows
+  const count = typeof n === "bigint" ? Number(n) : Number(n)
+  return count > 0
+}
+
+/** Idempotent : une seule valeur si plusieurs appels (ex. deux clients). */
+export async function markDuelLiveIfUnset(duelId: string) {
+  await getDb()
+    .updateTable("duels")
+    .set({ duel_live_at: new Date(), updated_at: new Date() })
+    .where("id", "=", duelId)
+    .where("duel_live_at", "is", null)
+    .execute()
+}
+
+export async function markDuelClosedIfUnset(duelId: string) {
+  await getDb()
+    .updateTable("duels")
+    .set({ duel_closed_at: new Date(), updated_at: new Date() })
+    .where("id", "=", duelId)
+    .where("duel_closed_at", "is", null)
+    .execute()
 }
