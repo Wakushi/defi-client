@@ -15,19 +15,19 @@ const USDC_DECIMALS = 6;
 export async function POST(request: NextRequest) {
   const session = await getSessionFromRequest(request);
   if (!session) {
-    return NextResponse.json({ error: "Non connecté." }, { status: 401 });
+    return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   }
 
   const user = await findUserById(session.userId);
   if (!user || user.pseudo !== session.pseudo) {
-    return NextResponse.json({ error: "Session invalide." }, { status: 401 });
+    return NextResponse.json({ error: "Invalid session." }, { status: 401 });
   }
 
   let body: unknown;
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "JSON invalide." }, { status: 400 });
+    return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
   }
 
   const b = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
@@ -44,30 +44,30 @@ export async function POST(request: NextRequest) {
         : NaN;
 
   if (!stakeRaw) {
-    return NextResponse.json({ error: "stakeUsdc est requis (montant en USDC)." }, { status: 400 });
+    return NextResponse.json({ error: "stakeUsdc is required (USDC amount)." }, { status: 400 });
   }
 
   let units: bigint;
   try {
     units = parseUnits(stakeRaw, USDC_DECIMALS);
   } catch {
-    return NextResponse.json({ error: "Montant USDC invalide." }, { status: 400 });
+    return NextResponse.json({ error: "Invalid USDC amount." }, { status: 400 });
   }
 
   if (units <= BigInt(0)) {
-    return NextResponse.json({ error: "La mise doit être strictement positive." }, { status: 400 });
+    return NextResponse.json({ error: "Stake must be strictly positive." }, { status: 400 });
   }
 
   const stakeUsdc = formatUnits(units, USDC_DECIMALS);
 
   if (Number.isNaN(durationSeconds)) {
-    return NextResponse.json({ error: "durationSeconds est requis (entier)." }, { status: 400 });
+    return NextResponse.json({ error: "durationSeconds is required (integer)." }, { status: 400 });
   }
 
   if (durationSeconds < MIN_DURATION_SEC || durationSeconds > MAX_DURATION_SEC) {
     return NextResponse.json(
       {
-        error: `Durée entre ${MIN_DURATION_SEC} s et ${MAX_DURATION_SEC} s.`,
+        error: `Duration must be between ${MIN_DURATION_SEC} s and ${MAX_DURATION_SEC} s.`,
       },
       { status: 400 },
     );

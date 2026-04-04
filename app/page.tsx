@@ -7,7 +7,7 @@ export default function Home() {
       <div className="mb-8 flex flex-col items-center gap-2">
         <GameLogo />
         <p className="font-[family-name:var(--font-orbitron)] text-[10px] font-semibold uppercase tracking-[0.35em] text-[var(--game-text-muted)]">
-          Arène · Wallet · Gains
+          Arena · Wallet · Gains
         </p>
       </div>
       <HomeAuth />

@@ -41,7 +41,7 @@ type DuelPayload = {
 function formatUsdc(raw: string) {
   const n = Number(raw);
   if (!Number.isFinite(n)) return raw;
-  return new Intl.NumberFormat("fr-FR", {
+  return new Intl.NumberFormat("en-US", {
     minimumFractionDigits: 0,
     maximumFractionDigits: 6,
   }).format(n);
@@ -76,13 +76,13 @@ export function DuelPrepareView() {
   const [execLoading, setExecLoading] = useState(false);
   const [execError, setExecError] = useState<string | null>(null);
   const [txHash, setTxHash] = useState<string | null>(null);
-  /** Une seule tentative auto à la fin du compte à rebours (évite double envoi). */
+  /** Single auto attempt after countdown (avoids double submit). */
   const autoSignStartedRef = useRef(false);
   const passwordRef = useRef(password);
   const txHashRef = useRef(txHash);
   const onExecuteRef = useRef<() => Promise<void>>(async () => {});
   const scheduleSignTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  /** Évite de reprogrammer le même `readyBothAt` à chaque poll. */
+  /** Avoid rescheduling the same `readyBothAt` on every poll. */
   const scheduledForReadyBothAtRef = useRef<string | null>(null);
 
   passwordRef.current = password;
@@ -96,7 +96,7 @@ export function DuelPrepareView() {
       const data = (await r.json()) as DuelPayload & { error?: string };
       if (!r.ok) {
         setDuel(null);
-        setLoadError(data.error ?? "Duel introuvable.");
+        setLoadError(data.error ?? "Duel not found.");
         return;
       }
       setDuel(data);
@@ -106,7 +106,7 @@ export function DuelPrepareView() {
         setLong(data.myTradeConfig.long);
       }
 
-      // Même instant cible pour les deux clients : `readyBothAt` (serveur) + compte à rebours, pas le prochain poll/tick React.
+      // Same target instant for both clients: server `readyBothAt` + countdown, not next poll/React tick.
       const v = data.viewer;
       const canSign = Boolean(v && (v.isCreator || v.isOpponent));
       const anchor = data.readyBothAt;
@@ -139,7 +139,7 @@ export function DuelPrepareView() {
       }
     } catch {
       setDuel(null);
-      setLoadError("Erreur réseau.");
+      setLoadError("Network error.");
     } finally {
       setLoading(false);
     }
@@ -197,7 +197,7 @@ export function DuelPrepareView() {
   async function onMarkReady() {
     if (!duelId) return;
     if (!password.trim()) {
-      setReadyError("Entre ton mot de passe wallet avant de marquer prêt (il reste dans ton navigateur).");
+      setReadyError("Enter your wallet password before marking ready (it stays in your browser).");
       return;
     }
     setReadyError(null);
@@ -216,12 +216,12 @@ export function DuelPrepareView() {
       });
       const data = (await res.json()) as { error?: string };
       if (!res.ok) {
-        setReadyError(data.error ?? "Échec.");
+        setReadyError(data.error ?? "Failed.");
         return;
       }
       await loadDuel();
     } catch {
-      setReadyError("Erreur réseau.");
+      setReadyError("Network error.");
     } finally {
       setReadyLoading(false);
     }
@@ -240,7 +240,7 @@ export function DuelPrepareView() {
       });
       const data = (await res.json()) as { error?: string; txHash?: string };
       if (!res.ok) {
-        setExecError(data.error ?? "Échec.");
+        setExecError(data.error ?? "Failed.");
         return;
       }
       if (data.txHash) {
@@ -248,7 +248,7 @@ export function DuelPrepareView() {
         setPassword("");
       }
     } catch {
-      setExecError("Erreur réseau.");
+      setExecError("Network error.");
     } finally {
       setExecLoading(false);
     }
@@ -267,7 +267,7 @@ export function DuelPrepareView() {
         <GameHudBar>
           <GameLogo className="!text-sm" />
         </GameHudBar>
-        <p className="p-8 text-sm text-[var(--game-danger)]">Identifiant manquant.</p>
+        <p className="p-8 text-sm text-[var(--game-danger)]">Missing duel id.</p>
       </>
     );
   }
@@ -282,7 +282,7 @@ export function DuelPrepareView() {
         </GameHudBar>
         <main className="mx-auto max-w-lg flex-1 px-4 py-16">
           <p className={`${gameMuted} font-[family-name:var(--font-orbitron)] text-xs uppercase tracking-widest`}>
-            Chargement…
+            Loading…
           </p>
         </main>
       </>
@@ -298,9 +298,9 @@ export function DuelPrepareView() {
           </Link>
         </GameHudBar>
         <main className="mx-auto max-w-lg flex-1 space-y-4 px-4 py-16">
-          <p className="text-sm text-[var(--game-danger)]">{loadError ?? "Introuvable."}</p>
+          <p className="text-sm text-[var(--game-danger)]">{loadError ?? "Not found."}</p>
           <Link href="/" className={gameLink}>
-            Retour au hub
+            Back to hub
           </Link>
         </main>
       </>
@@ -316,9 +316,9 @@ export function DuelPrepareView() {
           </Link>
         </GameHudBar>
         <main className="mx-auto max-w-lg flex-1 space-y-4 px-4 py-16">
-          <p className={gameMuted}>Le duel n’a pas encore deux joueurs.</p>
+          <p className={gameMuted}>This duel does not have two players yet.</p>
           <Link href={`/duel/${duelId}`} className={gameLink}>
-            Retour au salon
+            Back to lobby
           </Link>
         </main>
       </>
@@ -334,9 +334,9 @@ export function DuelPrepareView() {
           </Link>
         </GameHudBar>
         <main className="mx-auto max-w-lg flex-1 space-y-4 px-4 py-16">
-          <p className={gameMuted}>Tu ne participes pas à ce duel.</p>
+          <p className={gameMuted}>You are not in this duel.</p>
           <Link href="/" className={gameLink}>
-            Retour au hub
+            Back to hub
           </Link>
         </main>
       </>
@@ -350,49 +350,49 @@ export function DuelPrepareView() {
           <GameLogo className="!text-sm sm:!text-base" />
         </Link>
         <p className="hidden font-[family-name:var(--font-orbitron)] text-[9px] font-bold uppercase tracking-[0.25em] text-[var(--game-text-muted)] sm:block">
-          Loadout combat
+          Combat loadout
         </p>
       </GameHudBar>
 
       <main className="mx-auto flex max-w-lg flex-1 flex-col gap-6 px-4 py-10 sm:py-14">
         <div className="space-y-3">
-          <p className={gameSubtitle}>Préparation du trade</p>
-          <h1 className={`${gameTitle} !text-xl sm:!text-2xl`}>Configuration Gains</h1>
+          <p className={gameSubtitle}>Trade prep</p>
+          <h1 className={`${gameTitle} !text-xl sm:!text-2xl`}>Gains setup</h1>
           <GameVsBanner
             left={duel.creatorPseudo}
             right={duel.opponentPseudo ?? "—"}
-            leftTag="Créateur"
-            rightTag="Adversaire"
+            leftTag="Creator"
+            rightTag="Opponent"
           />
           <p className={gameMuted}>
-            Mise : {formatUsdc(duel.stakeUsdc)} USDC chacun · durée {Math.round(duel.durationSeconds / 60)}{" "}
-            min
+            Stake: {formatUsdc(duel.stakeUsdc)} USDC each · duration {Math.round(duel.durationSeconds / 60)} min
           </p>
         </div>
 
         <div className={`${gamePanel} ${gamePanelTopAccent} space-y-3 p-6 text-sm`}>
           <p className="font-[family-name:var(--font-share-tech)] text-[var(--game-cyan)]">
-            Statut prêt [{duel.readyState[0]}, {duel.readyState[1]}] <span className="text-[var(--game-text-muted)]">· créateur, adversaire</span>
+            Ready status [{duel.readyState[0]}, {duel.readyState[1]}]{" "}
+            <span className="text-[var(--game-text-muted)]">· creator, opponent</span>
           </p>
           <p className={gameMuted}>
-            Entre ton mot de passe wallet <span className="font-semibold text-[var(--game-text)]">avant</span> de te
-            marquer prêt. Compte à rebours 3 → 1 puis{" "}
-            <span className="font-semibold text-[var(--game-magenta)]">signature auto</span> des deux côtés.
+            Enter your wallet password <span className="font-semibold text-[var(--game-text)]">before</span> marking
+            ready. Countdown 3 → 1 then{" "}
+            <span className="font-semibold text-[var(--game-magenta)]">auto-sign</span> on both sides.
           </p>
         </div>
 
         {!duel.myReady ? (
           <div className={`${gamePanel} space-y-4 p-6`}>
             <h2 className="font-[family-name:var(--font-orbitron)] text-sm font-bold uppercase tracking-wider text-[var(--game-magenta)]">
-              Tes paramètres
+              Your settings
             </h2>
             <label className="block space-y-2">
-              <span className={gameLabel}>Mot de passe wallet (Dynamic)</span>
+              <span className={gameLabel}>Wallet password (Dynamic)</span>
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Pour signer après le countdown"
+                placeholder="Used to sign after countdown"
                 className={gameInput}
                 autoComplete="current-password"
               />
@@ -409,7 +409,7 @@ export function DuelPrepareView() {
               />
             </label>
             <label className="block space-y-2">
-              <span className={gameLabel}>Levier (×)</span>
+              <span className={gameLabel}>Leverage (×)</span>
               <input
                 type="number"
                 min={1}
@@ -426,7 +426,7 @@ export function DuelPrepareView() {
                 onChange={(e) => setLong(e.target.checked)}
                 className="size-4 accent-[var(--game-cyan)]"
               />
-              <span>Long (décoche pour short)</span>
+              <span>Long (uncheck for short)</span>
             </label>
             {readyError ? (
               <p className="text-sm text-[var(--game-danger)]">{readyError}</p>
@@ -437,35 +437,34 @@ export function DuelPrepareView() {
               onClick={() => void onMarkReady()}
               className={gameBtnPrimary}
             >
-              {readyLoading ? "Envoi…" : "Marquer prêt — GO"}
+              {readyLoading ? "Sending…" : "Mark ready — GO"}
             </button>
           </div>
         ) : (
           <div className="rounded-sm border-2 border-[var(--game-cyan)]/40 bg-[rgba(65,245,240,0.08)] px-4 py-4 text-sm">
             <p className="font-[family-name:var(--font-orbitron)] text-xs font-bold uppercase tracking-wider text-[var(--game-cyan)]">
-              Prêt confirmé
+              Ready locked in
             </p>
             <p className={`${gameMuted} mt-1`}>
-              Pair {pairIndex} · {leverageX}× · {long ? "Long" : "Short"} · mot de passe en mémoire pour la
-              signature auto
+              Pair {pairIndex} · {leverageX}× · {long ? "Long" : "Short"} · password kept for auto-sign
             </p>
           </div>
         )}
 
         {duel.myReady && !duel.bothReady ? (
           <p className={`${gameMuted} font-[family-name:var(--font-orbitron)] text-xs uppercase tracking-[0.2em] text-[var(--game-amber)]`}>
-            En attente de l’adversaire…
+            Waiting for opponent…
           </p>
         ) : null}
 
         {duel.bothReady && cd !== null ? (
           <div className="game-countdown-overlay fixed inset-0 z-50 flex flex-col items-center justify-center">
             <p className="mb-6 font-[family-name:var(--font-orbitron)] text-[10px] font-black uppercase tracking-[0.5em] text-[var(--game-magenta)] [text-shadow:0_0_16px_rgba(255,61,154,0.6)]">
-              Engagement
+              Engage
             </p>
             <p className="game-countdown-num tabular-nums">{cd}</p>
             <p className="mt-8 font-[family-name:var(--font-orbitron)] text-[10px] font-bold uppercase tracking-[0.35em] text-[var(--game-text-muted)]">
-              Les positions vont s’ouvrir
+              Positions will open
             </p>
           </div>
         ) : null}
@@ -473,13 +472,13 @@ export function DuelPrepareView() {
         {duel.bothReady && countdownFinished ? (
           <div className={`${gamePanel} ${gamePanelTopAccent} space-y-4 p-6`}>
             <h2 className="font-[family-name:var(--font-orbitron)] text-sm font-bold uppercase text-[var(--game-amber)]">
-              Lancement du trade
+              Trade launch
             </h2>
             {execLoading && !txHash ? (
-              <p className={gameMuted}>Signature en cours (mot de passe saisi plus haut)…</p>
+              <p className={gameMuted}>Signing in progress (password entered above)…</p>
             ) : null}
             {!execLoading && !txHash && !execError ? (
-              <p className={gameMuted}>Démarrage automatique…</p>
+              <p className={gameMuted}>Auto-starting…</p>
             ) : null}
             {execError ? (
               <div className="space-y-3">
@@ -500,7 +499,7 @@ export function DuelPrepareView() {
                   onClick={() => void onRetrySign()}
                   className="w-full rounded-sm border-2 border-[var(--game-magenta)] bg-transparent py-2.5 text-sm font-bold uppercase tracking-wider text-[var(--game-magenta)] transition enabled:hover:bg-[rgba(255,61,154,0.12)] disabled:opacity-50"
                 >
-                  Réessayer la signature
+                  Retry signing
                 </button>
               </div>
             ) : null}
@@ -513,7 +512,7 @@ export function DuelPrepareView() {
         ) : null}
 
         <Link href={`/duel/${duelId}`} className={`${gameLink} text-center`}>
-          ← Retour au salon
+          ← Back to lobby
         </Link>
       </main>
     </>

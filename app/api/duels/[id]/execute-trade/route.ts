@@ -30,26 +30,26 @@ export async function POST(
 ) {
   if (!isFaucetChainConfigured()) {
     return NextResponse.json(
-      { error: "FAUCET_RPC_URL et FAUCET_CHAIN_ID requis." },
+      { error: "FAUCET_RPC_URL and FAUCET_CHAIN_ID are required." },
       { status: 500 },
     );
   }
 
   const { id: duelId } = await context.params;
   if (!UUID_RE.test(duelId)) {
-    return NextResponse.json({ error: "Identifiant de duel invalide." }, { status: 400 });
+    return NextResponse.json({ error: "Invalid duel id." }, { status: 400 });
   }
 
   const session = await getSessionFromRequest(request);
   if (!session) {
-    return NextResponse.json({ error: "Non connecté." }, { status: 401 });
+    return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   }
 
   let body: unknown;
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "JSON invalide." }, { status: 400 });
+    return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
   }
 
   const password =
@@ -61,28 +61,28 @@ export async function POST(
       : "";
 
   if (!password) {
-    return NextResponse.json({ error: "Mot de passe requis pour signer." }, { status: 400 });
+    return NextResponse.json({ error: "Password required to sign." }, { status: 400 });
   }
 
   const user = await findUserById(session.userId);
   if (!user || user.pseudo !== session.pseudo) {
-    return NextResponse.json({ error: "Session invalide." }, { status: 401 });
+    return NextResponse.json({ error: "Invalid session." }, { status: 401 });
   }
 
   const passwordOk = await bcrypt.compare(password, user.password_hash);
   if (!passwordOk) {
-    return NextResponse.json({ error: "Mot de passe incorrect." }, { status: 401 });
+    return NextResponse.json({ error: "Wrong password." }, { status: 401 });
   }
 
   const duel = await findDuelById(duelId);
   if (!duel) {
-    return NextResponse.json({ error: "Duel introuvable." }, { status: 404 });
+    return NextResponse.json({ error: "Duel not found." }, { status: 404 });
   }
 
   const rs = parseReadyState(duel.ready_state);
   if (rs[0] !== 1 || rs[1] !== 1) {
     return NextResponse.json(
-      { error: "Les deux joueurs doivent être marqués prêts." },
+      { error: "Both players must be marked ready." },
       { status: 400 },
     );
   }
@@ -90,27 +90,27 @@ export async function POST(
   const isCreator = user.id === duel.creator_id;
   const isOpponent = user.id === duel.opponent_id;
   if (!isCreator && !isOpponent) {
-    return NextResponse.json({ error: "Tu ne participes pas à ce duel." }, { status: 403 });
+    return NextResponse.json({ error: "You are not in this duel." }, { status: 403 });
   }
 
   const rawConfig = isCreator ? duel.creator_trade_config : duel.opponent_trade_config;
   const sideConfig = parseDuelTradeConfig(rawConfig);
   if (!sideConfig) {
     return NextResponse.json(
-      { error: "Config de trade introuvable : repasse par « Prêt »." },
+      { error: "Trade config missing — go through Ready again." },
       { status: 400 },
     );
   }
 
   if (!user.wallet_address) {
-    return NextResponse.json({ error: "Aucun wallet sur le compte." }, { status: 400 });
+    return NextResponse.json({ error: "No wallet on this account." }, { status: 400 });
   }
 
   let walletAddress: `0x${string}`;
   try {
     walletAddress = getAddress(user.wallet_address as `0x${string}`);
   } catch {
-    return NextResponse.json({ error: "Adresse wallet invalide." }, { status: 500 });
+    return NextResponse.json({ error: "Invalid wallet address." }, { status: 500 });
   }
 
   let expectedCollateral: `0x${string}`;
@@ -118,7 +118,7 @@ export async function POST(
     expectedCollateral = getGnsCollateralTokenAddress();
   } catch {
     return NextResponse.json(
-      { error: "GNS_COLLATERAL_TOKEN_ADDRESS manquant." },
+      { error: "GNS_COLLATERAL_TOKEN_ADDRESS is missing." },
       { status: 500 },
     );
   }
@@ -127,7 +127,7 @@ export async function POST(
   try {
     collateralWei = parseUnits(duel.stake_usdc, USDC_DECIMALS);
   } catch {
-    return NextResponse.json({ error: "Mise USDC du duel invalide." }, { status: 500 });
+    return NextResponse.json({ error: "Invalid duel USDC stake." }, { status: 500 });
   }
 
   const authToken = process.env.DYNAMIC_AUTH_TOKEN;
@@ -153,20 +153,20 @@ export async function POST(
   } catch (e) {
     console.error("[duel execute] balanceOf failed:", e);
     return NextResponse.json(
-      { error: "Impossible de lire le solde collatéral." },
+      { error: "Could not read collateral balance." },
       { status: 502 },
     );
   }
 
   if (onChainBalance < collateralWei) {
-    return NextResponse.json({ error: "Solde insuffisant pour la mise du duel." }, { status: 400 });
+    return NextResponse.json({ error: "Insufficient balance for duel stake." }, { status: 400 });
   }
 
   let trade: ReturnType<typeof buildGnsTradeFromDuelConfig>;
   try {
     trade = buildGnsTradeFromDuelConfig(walletAddress, collateralWei, sideConfig);
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "Trade invalide.";
+    const msg = e instanceof Error ? e.message : "Invalid trade.";
     return NextResponse.json({ error: msg }, { status: 400 });
   }
 
@@ -201,7 +201,7 @@ export async function POST(
     console.error("[duel execute] openTrade failed:", e);
     return NextResponse.json(
       {
-        error: e instanceof Error ? e.message : "openTrade a échoué.",
+        error: e instanceof Error ? e.message : "openTrade failed.",
       },
       { status: 502 },
     );

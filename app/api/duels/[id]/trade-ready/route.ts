@@ -36,27 +36,27 @@ export async function POST(
 ) {
   const { id: duelId } = await context.params;
   if (!UUID_RE.test(duelId)) {
-    return NextResponse.json({ error: "Identifiant de duel invalide." }, { status: 400 });
+    return NextResponse.json({ error: "Invalid duel id." }, { status: 400 });
   }
 
   const session = await getSessionFromRequest(request);
   if (!session) {
-    return NextResponse.json({ error: "Non connecté." }, { status: 401 });
+    return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   }
 
   const user = await findUserById(session.userId);
   if (!user || user.pseudo !== session.pseudo) {
-    return NextResponse.json({ error: "Session invalide." }, { status: 401 });
+    return NextResponse.json({ error: "Invalid session." }, { status: 401 });
   }
 
   const duel = await findDuelById(duelId);
   if (!duel) {
-    return NextResponse.json({ error: "Duel introuvable." }, { status: 404 });
+    return NextResponse.json({ error: "Duel not found." }, { status: 404 });
   }
 
   if (duel.opponent_id === null) {
     return NextResponse.json(
-      { error: "Le duel n’a pas encore d’adversaire." },
+      { error: "This duel has no opponent yet." },
       { status: 400 },
     );
   }
@@ -64,20 +64,20 @@ export async function POST(
   const isCreator = user.id === duel.creator_id;
   const isOpponent = user.id === duel.opponent_id;
   if (!isCreator && !isOpponent) {
-    return NextResponse.json({ error: "Tu ne participes pas à ce duel." }, { status: 403 });
+    return NextResponse.json({ error: "You are not in this duel." }, { status: 403 });
   }
 
   let body: unknown;
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "JSON invalide." }, { status: 400 });
+    return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
   }
 
   const config = parseBodyConfig(body);
   if (!config) {
     return NextResponse.json(
-      { error: "pairIndex (0–65535), leverageX (1–500) et long requis." },
+      { error: "pairIndex (0–65535), leverageX (1–500), and long are required." },
       { status: 400 },
     );
   }
@@ -89,7 +89,7 @@ export async function POST(
   });
 
   if (!result.ok) {
-    return NextResponse.json({ error: "Duel introuvable." }, { status: 404 });
+    return NextResponse.json({ error: "Duel not found." }, { status: 404 });
   }
 
   return NextResponse.json({

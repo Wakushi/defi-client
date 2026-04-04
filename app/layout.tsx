@@ -21,8 +21,8 @@ const shareTechMono = Share_Tech_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Defiduel — Arène on-chain",
-  description: "Duels de trading avec wallet embarqué",
+  title: "DéFi — On-chain arena",
+  description: "Trading duels with an embedded wallet",
 };
 
 export default function RootLayout({
@@ -32,7 +32,7 @@ export default function RootLayout({
 }>) {
   return (
     <html
-      lang="fr"
+      lang="en"
       className={`${chakraPetch.variable} ${orbitron.variable} ${shareTechMono.variable} h-full antialiased`}
     >
       <body className="min-h-full">

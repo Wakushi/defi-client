@@ -30,7 +30,7 @@ function formatDuration(totalSec: number) {
 function formatUsdcDisplay(raw: string) {
   const n = Number(raw);
   if (!Number.isFinite(n)) return raw;
-  return new Intl.NumberFormat("fr-FR", {
+  return new Intl.NumberFormat("en-US", {
     minimumFractionDigits: 0,
     maximumFractionDigits: 6,
   }).format(n);
@@ -42,7 +42,7 @@ export default async function DuelLobbyPage({ params }: Props) {
   if (!duel) notFound();
 
   const stakeLabel = formatUsdcDisplay(duel.stake_usdc);
-  const opp = duel.opponent_pseudo ?? "En attente…";
+  const opp = duel.opponent_pseudo ?? "Waiting…";
 
   return (
     <>
@@ -51,41 +51,41 @@ export default async function DuelLobbyPage({ params }: Props) {
           <GameLogo className="!text-sm sm:!text-base" />
         </Link>
         <p className="hidden font-[family-name:var(--font-orbitron)] text-[9px] font-bold uppercase tracking-[0.25em] text-[var(--game-text-muted)] sm:block">
-          Salon de match
+          Match lobby
         </p>
       </GameHudBar>
 
       <main className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-8 px-4 py-10 sm:py-14">
         <div className="space-y-3">
           <p className={gameSubtitle}>Match ID</p>
-          <h1 className={`${gameTitle} !text-2xl sm:!text-3xl`}>Arène ouverte</h1>
+          <h1 className={`${gameTitle} !text-2xl sm:!text-3xl`}>Arena open</h1>
           <p className={`${gameMuted} font-[family-name:var(--font-share-tech)] text-xs`}>{duel.id}</p>
         </div>
 
         <GameVsBanner
           left={duel.creator_pseudo}
           right={opp}
-          leftTag="Créateur"
-          rightTag="Adversaire"
+          leftTag="Creator"
+          rightTag="Opponent"
         />
 
         <div className="grid grid-cols-2 gap-3">
-          <GameStatPill label="Mise / joueur" value={`${stakeLabel} USDC`} />
-          <GameStatPill label="Temps de trade" value={formatDuration(duel.duration_seconds)} />
+          <GameStatPill label="Stake / player" value={`${stakeLabel} USDC`} />
+          <GameStatPill label="Trade time" value={formatDuration(duel.duration_seconds)} />
         </div>
 
         <div className="rounded-sm border-2 border-[var(--game-cyan-dim)] bg-[var(--game-bg-elevated)] p-5 backdrop-blur-md">
           <p className={`${gameMuted} text-xs leading-relaxed`}>
-            Les deux joueurs doivent rejoindre le salon, puis passer à la phase{" "}
-            <span className="font-semibold text-[var(--game-cyan)]">préparation trade</span> pour lancer
-            les positions en synchro.
+            Both players join the lobby, then go to{" "}
+            <span className="font-semibold text-[var(--game-cyan)]">trade prep</span> to open positions in
+            sync.
           </p>
         </div>
 
         {duel.opponent_pseudo ? (
           <p className="text-center">
             <Link href={`/duel/${duel.id}/prepare`} className={`${gameLink} text-base font-bold uppercase tracking-wider`}>
-              → Préparation du combat (trade)
+              → Combat prep (trade)
             </Link>
           </p>
         ) : null}
@@ -93,7 +93,7 @@ export default async function DuelLobbyPage({ params }: Props) {
         <DuelAcceptPanel duelId={duel.id} />
 
         <Link href="/" className={`${gameLink} text-center`}>
-          ← Retour au hub
+          ← Back to hub
         </Link>
       </main>
     </>

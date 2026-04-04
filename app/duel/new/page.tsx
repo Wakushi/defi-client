@@ -48,7 +48,7 @@ export default function NewDuelPage() {
     try {
       const min = Number.parseInt(durationMinutes, 10);
       if (!Number.isFinite(min) || min < 1) {
-        setError("Durée invalide (minutes ≥ 1).");
+        setError("Invalid duration (minutes ≥ 1).");
         return;
       }
       const res = await fetch("/api/duels", {
@@ -62,7 +62,7 @@ export default function NewDuelPage() {
       });
       const data = (await res.json()) as { error?: string; id?: string; joinPath?: string };
       if (!res.ok) {
-        setError(data.error ?? "Création impossible.");
+        setError(data.error ?? "Could not create duel.");
         return;
       }
       if (data.joinPath && typeof window !== "undefined") {
@@ -70,7 +70,7 @@ export default function NewDuelPage() {
         setJoinUrl(`${window.location.origin}${data.joinPath}`);
       }
     } catch {
-      setError("Erreur réseau.");
+      setError("Network error.");
     } finally {
       setLoading(false);
     }
@@ -93,7 +93,7 @@ export default function NewDuelPage() {
         </GameHudBar>
         <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-6 px-4 py-16">
           <p className={`${gameMuted} font-[family-name:var(--font-orbitron)] text-xs uppercase tracking-widest`}>
-            Chargement…
+            Loading…
           </p>
         </main>
       </>
@@ -107,9 +107,9 @@ export default function NewDuelPage() {
           <GameLogo className="!text-sm" />
         </GameHudBar>
         <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-6 px-4 py-16">
-          <p className={gameMuted}>Connecte-toi pour créer une arène.</p>
+          <p className={gameMuted}>Sign in to create an arena.</p>
           <Link href="/" className={gameLink}>
-            Retour au hub
+            Back to hub
           </Link>
         </main>
       </>
@@ -123,34 +123,34 @@ export default function NewDuelPage() {
           <GameLogo className="!text-sm sm:!text-base" />
         </Link>
         <p className="font-[family-name:var(--font-orbitron)] text-[9px] font-bold uppercase tracking-[0.2em] text-[var(--game-text-muted)]">
-          Création
+          Create
         </p>
       </GameHudBar>
 
       <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-8 px-4 py-10 sm:py-14">
         <div className="space-y-2">
-          <p className={gameSubtitle}>Nouvelle partie</p>
-          <h1 className={gameTitle}>Créer un duel</h1>
+          <p className={gameSubtitle}>New match</p>
+          <h1 className={gameTitle}>Create duel</h1>
           <p className={gameMuted}>
-            Mise par joueur et durée du trade. Un lien d’invitation sera généré pour ton adversaire.
+            Stake per player and trade duration. An invite link is generated for your opponent.
           </p>
         </div>
 
         <form onSubmit={(e) => void onSubmit(e)} className={`${gamePanel} ${gamePanelTopAccent} space-y-4 p-6`}>
           <label className="block space-y-2">
-            <span className={gameLabel}>Mise par joueur (USDC)</span>
+            <span className={gameLabel}>Stake per player (USDC)</span>
             <input
               type="text"
               inputMode="decimal"
               value={stakeUsdc}
               onChange={(e) => setStakeUsdc(e.target.value)}
-              placeholder="ex. 100 ou 50,5"
+              placeholder="e.g. 100 or 50.5"
               className={gameInput}
               required
             />
           </label>
           <label className="block space-y-2">
-            <span className={gameLabel}>Durée du trade (minutes)</span>
+            <span className={gameLabel}>Trade duration (minutes)</span>
             <input
               type="number"
               min={1}
@@ -167,25 +167,25 @@ export default function NewDuelPage() {
             </p>
           ) : null}
           <button type="submit" disabled={loading} className={gameBtnPrimary}>
-            {loading ? "Création…" : "Générer l’arène + lien"}
+            {loading ? "Creating…" : "Create arena & link"}
           </button>
         </form>
 
         {joinUrl ? (
           <div className={`${gamePanel} space-y-3 border-[var(--game-magenta-dim)] p-5`}>
             <p className="font-[family-name:var(--font-orbitron)] text-xs font-bold uppercase tracking-wider text-[var(--game-magenta)]">
-              Lien d’invitation
+              Invite link
             </p>
             <p className="break-all font-[family-name:var(--font-share-tech)] text-xs text-[var(--game-cyan)]">
               {joinUrl}
             </p>
             <div className="flex flex-wrap gap-2">
               <button type="button" onClick={() => void copyUrl()} className={`${gameBtnGhost} !w-auto`}>
-                Copier
+                Copy
               </button>
               {joinPath ? (
                 <Link href={joinPath} className={`${gameBtnGhost} !w-auto border-[var(--game-magenta-dim)] text-[var(--game-magenta)]`}>
-                  Ouvrir le salon
+                  Open lobby
                 </Link>
               ) : null}
             </div>
@@ -193,7 +193,7 @@ export default function NewDuelPage() {
         ) : null}
 
         <Link href="/" className={`${gameLink} text-center`}>
-          ← Retour au hub
+          ← Back to hub
         </Link>
       </main>
     </>

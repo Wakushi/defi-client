@@ -46,17 +46,15 @@ export function LoginForm({ onSuccess }: Props) {
       className={`${gamePanel} ${gamePanelTopAccent} mx-auto w-full max-w-md space-y-6 p-8`}
     >
       <div className="space-y-2">
-        <p className={gameLabel}>Accès joueur</p>
-        <h1 className={`${gameTitle} text-xl sm:text-2xl`}>Connexion</h1>
-        <p className={gameMuted}>
-          Même pseudo et mot de passe qu’à l’inscription.
-        </p>
+        <p className={gameLabel}>Player access</p>
+        <h1 className={`${gameTitle} text-xl sm:text-2xl`}>Log in</h1>
+        <p className={gameMuted}>Same username and password you used at sign-up.</p>
       </div>
 
       <div className="space-y-4">
         <div className="space-y-2">
           <label htmlFor="login-username" className={gameLabel}>
-            Pseudo
+            Username
           </label>
           <input
             id="login-username"
@@ -67,12 +65,12 @@ export function LoginForm({ onSuccess }: Props) {
             value={username}
             onChange={(ev) => setUsername(ev.target.value)}
             className={gameInput}
-            placeholder="ton_pseudo"
+            placeholder="your_username"
           />
         </div>
         <div className="space-y-2">
           <label htmlFor="login-password" className={gameLabel}>
-            Mot de passe
+            Password
           </label>
           <input
             id="login-password"
@@ -97,7 +95,7 @@ export function LoginForm({ onSuccess }: Props) {
       ) : null}
 
       <button type="submit" disabled={loading} className={gameBtnPrimary}>
-        {loading ? "Connexion…" : "Entrer dans l’arène"}
+        {loading ? "Signing in…" : "Enter the arena"}
       </button>
     </form>
   );

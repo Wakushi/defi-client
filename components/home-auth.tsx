@@ -40,7 +40,7 @@ export function HomeAuth() {
     setUser(data.user ?? null);
   }, []);
 
-  /* eslint-disable react-hooks/set-state-in-effect -- chargement initial /api/auth/me */
+  /* eslint-disable react-hooks/set-state-in-effect -- initial /api/auth/me load */
   useEffect(() => {
     let cancelled = false;
     void refresh().finally(() => {
@@ -68,7 +68,7 @@ export function HomeAuth() {
   if (loading) {
     return (
       <p className={`${gameMuted} text-center font-[family-name:var(--font-orbitron)] text-xs uppercase tracking-widest`}>
-        Chargement…
+        Loading…
       </p>
     );
   }
@@ -79,15 +79,15 @@ export function HomeAuth() {
         <div className={`${gamePanel} ${gamePanelTopAccent} space-y-4 p-8`}>
           <div className="flex items-start justify-between gap-4">
             <div>
-              <p className={gameLabel}>Joueur connecté</p>
+              <p className={gameLabel}>Signed in</p>
               <p className={`${gameTitle} mt-1 text-xl sm:text-2xl`}>{user.username}</p>
             </div>
             <div className="flex shrink-0 flex-col items-end gap-2 sm:flex-row sm:items-start">
               <Link href="/duel/new" className={`${gameBtnPrimary} !w-auto px-4 py-2 text-xs`}>
-                Nouveau duel
+                New duel
               </Link>
               <button type="button" onClick={() => void logout()} className={`${gameBtnGhost} !w-auto`}>
-                Déconnexion
+                Log out
               </button>
             </div>
           </div>
@@ -122,14 +122,14 @@ export function HomeAuth() {
           onClick={() => setMode("signup")}
           className={`flex-1 rounded-sm py-2.5 text-xs font-bold uppercase tracking-wider transition ${gameTabActive(mode === "signup")}`}
         >
-          Inscription
+          Sign up
         </button>
         <button
           type="button"
           onClick={() => setMode("login")}
           className={`flex-1 rounded-sm py-2.5 text-xs font-bold uppercase tracking-wider transition ${gameTabActive(mode === "login")}`}
         >
-          Connexion
+          Log in
         </button>
       </div>
       {mode === "signup" ? (

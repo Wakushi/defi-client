@@ -46,17 +46,17 @@ export function SignupForm({ onSuccess }: Props) {
       className={`${gamePanel} ${gamePanelTopAccent} mx-auto w-full max-w-md space-y-6 p-8`}
     >
       <div className="space-y-2">
-        <p className={gameLabel}>Nouveau combattant</p>
-        <h1 className={`${gameTitle} text-xl sm:text-2xl`}>Créer un compte</h1>
+        <p className={gameLabel}>New fighter</p>
+        <h1 className={`${gameTitle} text-xl sm:text-2xl`}>Create account</h1>
         <p className={gameMuted}>
-          Choisis un pseudo et un mot de passe. Un wallet Dynamic est créé côté serveur ; le même mot de passe sert à signer tes trades.
+          Pick a username and password. A Dynamic embedded wallet is created on the server; the same password is used to sign your trades.
         </p>
       </div>
 
       <div className="space-y-4">
         <div className="space-y-2">
           <label htmlFor="username" className={gameLabel}>
-            Pseudo
+            Username
           </label>
           <input
             id="username"
@@ -69,12 +69,12 @@ export function SignupForm({ onSuccess }: Props) {
             value={username}
             onChange={(ev) => setUsername(ev.target.value)}
             className={gameInput}
-            placeholder="ton_pseudo"
+            placeholder="your_username"
           />
         </div>
         <div className="space-y-2">
           <label htmlFor="password" className={gameLabel}>
-            Mot de passe
+            Password
           </label>
           <input
             id="password"
@@ -86,7 +86,7 @@ export function SignupForm({ onSuccess }: Props) {
             value={password}
             onChange={(ev) => setPassword(ev.target.value)}
             className={gameInput}
-            placeholder="8 caractères minimum"
+            placeholder="At least 8 characters"
           />
         </div>
       </div>
@@ -101,7 +101,7 @@ export function SignupForm({ onSuccess }: Props) {
       ) : null}
 
       <button type="submit" disabled={loading} className={gameBtnPrimary}>
-        {loading ? "Création…" : "Créer compte + wallet"}
+        {loading ? "Creating…" : "Create account & wallet"}
       </button>
     </form>
   );

@@ -12,17 +12,17 @@ export const runtime = "nodejs";
 export async function GET(request: NextRequest) {
   const session = await getSessionFromRequest(request);
   if (!session) {
-    return NextResponse.json({ error: "Non connecté." }, { status: 401 });
+    return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   }
 
   const user = await findUserById(session.userId);
   if (!user || user.pseudo !== session.pseudo) {
-    return NextResponse.json({ error: "Session invalide." }, { status: 401 });
+    return NextResponse.json({ error: "Invalid session." }, { status: 401 });
   }
 
   if (!user.wallet_address) {
     return NextResponse.json(
-      { error: "Aucune adresse wallet enregistrée." },
+      { error: "No wallet address on file." },
       { status: 400 },
     );
   }
@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
   try {
     wallet = getAddress(user.wallet_address.trim() as `0x${string}`);
   } catch {
-    return NextResponse.json({ error: "Adresse wallet invalide en base." }, { status: 500 });
+    return NextResponse.json({ error: "Invalid wallet address in database." }, { status: 500 });
   }
 
   async function onchainFallback(reason: "mobula_error" | "mobula_empty") {
@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
   } catch (e) {
     const fb = await onchainFallback("mobula_error");
     if (fb) return fb;
-    const message = e instanceof Error ? e.message : "Erreur Mobula.";
+    const message = e instanceof Error ? e.message : "Mobula error.";
     return NextResponse.json({ error: message }, { status: 502 });
   }
 }

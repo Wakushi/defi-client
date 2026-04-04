@@ -66,7 +66,7 @@ export async function fetchMobulaWalletPortfolio(
   const json: unknown = await res.json();
   const parsed = parseMobulaPortfolioBody(json);
   if (!parsed) {
-    throw new Error("Mobula portfolio: réponse inattendue.");
+    throw new Error("Mobula portfolio: unexpected response.");
   }
 
   const positions = flattenMobulaAssets(parsed.assets);

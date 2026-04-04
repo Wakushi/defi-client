@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error:
-          "collateralAmountRaw et tokenAddress sont requis (sélectionne un actif et un montant au-dessus).",
+          "collateralAmountRaw and tokenAddress are required (pick an asset and amount above).",
       },
       { status: 400 },
     );
@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
     expectedCollateral = getGnsCollateralTokenAddress();
   } catch {
     return NextResponse.json(
-      { error: "GNS_COLLATERAL_TOKEN_ADDRESS manquant côté serveur." },
+      { error: "GNS_COLLATERAL_TOKEN_ADDRESS missing on server." },
       { status: 500 },
     );
   }
@@ -76,14 +76,13 @@ export async function POST(request: NextRequest) {
   try {
     tokenAddress = getAddress(tokenAddressIn as `0x${string}`);
   } catch {
-    return NextResponse.json({ error: "tokenAddress invalide." }, { status: 400 });
+    return NextResponse.json({ error: "Invalid tokenAddress." }, { status: 400 });
   }
 
   if (tokenAddress.toLowerCase() !== expectedCollateral.toLowerCase()) {
     return NextResponse.json(
       {
-        error:
-          "Le jeton sélectionné n’est pas le collatéral Gains (GNS_COLLATERAL_TOKEN_ADDRESS).",
+        error: "Selected token is not Gains collateral (GNS_COLLATERAL_TOKEN_ADDRESS).",
       },
       { status: 400 },
     );
@@ -94,14 +93,14 @@ export async function POST(request: NextRequest) {
     collateralWei = BigInt(collateralAmountRaw);
   } catch {
     return NextResponse.json(
-      { error: "collateralAmountRaw doit être un entier (unités du token)." },
+      { error: "collateralAmountRaw must be an integer (token units)." },
       { status: 400 },
     );
   }
 
   if (collateralWei <= BigInt(0)) {
     return NextResponse.json(
-      { error: "Le montant collatéral doit être strictement positif." },
+      { error: "Collateral amount must be strictly positive." },
       { status: 400 },
     );
   }
@@ -159,14 +158,14 @@ export async function POST(request: NextRequest) {
   } catch (e) {
     console.error("[gns] balanceOf collateral failed:", e);
     return NextResponse.json(
-      { error: "Impossible de lire le solde du collatéral sur la chaîne faucet." },
+      { error: "Could not read collateral balance on the faucet chain." },
       { status: 502 },
     );
   }
 
   if (onChainBalance < collateralWei) {
     return NextResponse.json(
-      { error: "Solde collatéral insuffisant sur la chaîne du trade." },
+      { error: "Insufficient collateral balance on the trade chain." },
       { status: 400 },
     );
   }
@@ -175,7 +174,7 @@ export async function POST(request: NextRequest) {
   try {
     trade = buildHardcodedTestTrade(walletAddress, collateralWei);
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "Montant collatéral invalide.";
+    const msg = e instanceof Error ? e.message : "Invalid collateral amount.";
     return NextResponse.json({ error: msg }, { status: 400 });
   }
 

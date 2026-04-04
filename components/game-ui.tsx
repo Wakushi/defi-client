@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-/** Panneau type écran de jeu / terminal */
+/** Game-style panel / terminal screen */
 export const gamePanel =
   "relative overflow-hidden rounded-sm border-2 border-[var(--game-cyan-dim)] bg-[var(--game-bg-elevated)] shadow-[0_0_40px_rgba(65,245,240,0.07),inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-md";
 
@@ -47,9 +47,10 @@ export function gameTabActive(active: boolean) {
 export function GameLogo({ className = "" }: { className?: string }) {
   return (
     <div
-      className={`font-[family-name:var(--font-orbitron)] text-lg font-black uppercase tracking-[0.35em] text-[var(--game-cyan)] [text-shadow:0_0_20px_rgba(65,245,240,0.55)] sm:text-xl ${className}`}
+      className={`font-[family-name:var(--font-orbitron)] text-lg font-black tracking-[0.2em] sm:text-xl ${className}`}
     >
-      Defi<span className="text-[var(--game-magenta)] [text-shadow:0_0_18px_rgba(255,61,154,0.55)]">duel</span>
+      <span className="text-[var(--game-cyan)] [text-shadow:0_0_20px_rgba(65,245,240,0.55)]">Dé</span>
+      <span className="text-[var(--game-magenta)] [text-shadow:0_0_18px_rgba(255,61,154,0.55)]">Fi</span>
     </div>
   );
 }

@@ -16,12 +16,12 @@ export async function GET(
 ) {
   const { id } = await context.params;
   if (!UUID_RE.test(id)) {
-    return NextResponse.json({ error: "Identifiant de duel invalide." }, { status: 400 });
+    return NextResponse.json({ error: "Invalid duel id." }, { status: 400 });
   }
 
   const duel = await findDuelWithPseudos(id);
   if (!duel) {
-    return NextResponse.json({ error: "Duel introuvable." }, { status: 404 });
+    return NextResponse.json({ error: "Duel not found." }, { status: 404 });
   }
 
   let viewer: { isCreator: boolean; isOpponent: boolean } | null = null;

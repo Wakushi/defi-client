@@ -41,7 +41,7 @@ type Props = { duelId: string };
 function formatUsdcLabel(raw: string) {
   const n = Number(raw);
   if (!Number.isFinite(n)) return raw;
-  return new Intl.NumberFormat("fr-FR", {
+  return new Intl.NumberFormat("en-US", {
     minimumFractionDigits: 0,
     maximumFractionDigits: 6,
   }).format(n);
@@ -65,13 +65,13 @@ export function DuelAcceptPanel({ duelId }: Props) {
       const data = (await r.json()) as DuelApi & { error?: string };
       if (!r.ok) {
         setDuel(null);
-        setDuelError(data.error ?? "Duel introuvable.");
+        setDuelError(data.error ?? "Duel not found.");
         return;
       }
       setDuel(data);
     } catch {
       setDuel(null);
-      setDuelError("Erreur réseau.");
+      setDuelError("Network error.");
     } finally {
       setDuelLoading(false);
     }
@@ -84,7 +84,7 @@ export function DuelAcceptPanel({ duelId }: Props) {
       const r = await fetch("/api/wallet/collateral-balance", { credentials: "include" });
       const data = (await r.json()) as BalanceApi & { error?: string };
       if (r.status === 401) {
-        setBalance({ configured: false, error: "Session expirée : reconnecte-toi." });
+        setBalance({ configured: false, error: "Session expired — sign in again." });
         return;
       }
       setBalance({
@@ -95,7 +95,7 @@ export function DuelAcceptPanel({ duelId }: Props) {
         error: data.error,
       });
     } catch {
-      setBalance({ configured: false, error: "Erreur réseau." });
+      setBalance({ configured: false, error: "Network error." });
     } finally {
       setBalanceLoading(false);
     }
@@ -136,12 +136,12 @@ export function DuelAcceptPanel({ duelId }: Props) {
       });
       const data = (await r.json()) as { error?: string };
       if (!r.ok) {
-        setJoinError(data.error ?? "Impossible d’accepter le duel.");
+        setJoinError(data.error ?? "Could not accept duel.");
         return;
       }
       await loadDuel();
     } catch {
-      setJoinError("Erreur réseau.");
+      setJoinError("Network error.");
     } finally {
       setJoinLoading(false);
     }
@@ -150,7 +150,7 @@ export function DuelAcceptPanel({ duelId }: Props) {
   if (duelLoading) {
     return (
       <p className={`${gameMuted} font-[family-name:var(--font-orbitron)] text-xs uppercase tracking-widest`}>
-        Chargement…
+        Loading…
       </p>
     );
   }
@@ -158,7 +158,7 @@ export function DuelAcceptPanel({ duelId }: Props) {
   if (duelError || !duel) {
     return (
       <p className="rounded-sm border border-[var(--game-danger)]/50 bg-[rgba(255,68,102,0.12)] px-3 py-2 text-sm text-[var(--game-danger)]">
-        {duelError ?? "Duel introuvable."}
+        {duelError ?? "Duel not found."}
       </p>
     );
   }
@@ -167,11 +167,11 @@ export function DuelAcceptPanel({ duelId }: Props) {
     return (
       <div className={`${gamePanel} ${gamePanelTopAccent} space-y-4 p-6`}>
         <div className="space-y-2">
-          <p className={gameLabel}>Invité</p>
-          <h2 className={`${gameTitle} text-lg sm:text-xl`}>Rejoindre l’arène</h2>
+          <p className={gameLabel}>Guest</p>
+          <h2 className={`${gameTitle} text-lg sm:text-xl`}>Join the arena</h2>
           <p className={gameMuted}>
-            Connecte-toi ou crée un compte. Ensuite tu verras ton solde USDC sur le wallet du compte : il
-            doit couvrir la mise ({formatUsdcLabel(duel.stakeUsdc)} USDC) pour accepter.
+            Sign in or create an account. You will see your account wallet USDC balance; it must cover the
+            stake ({formatUsdcLabel(duel.stakeUsdc)} USDC) to accept.
           </p>
         </div>
         <div className={gameTabRow}>
@@ -180,14 +180,14 @@ export function DuelAcceptPanel({ duelId }: Props) {
             onClick={() => setAuthMode("login")}
             className={`flex-1 rounded-sm py-2.5 text-xs font-bold uppercase tracking-wider transition ${gameTabActive(authMode === "login")}`}
           >
-            Connexion
+            Log in
           </button>
           <button
             type="button"
             onClick={() => setAuthMode("signup")}
             className={`flex-1 rounded-sm py-2.5 text-xs font-bold uppercase tracking-wider transition ${gameTabActive(authMode === "signup")}`}
           >
-            Créer un compte
+            Sign up
           </button>
         </div>
         {authMode === "login" ? (
@@ -202,17 +202,17 @@ export function DuelAcceptPanel({ duelId }: Props) {
   if (duel.viewer.isCreator) {
     return (
       <div className={`${gamePanel} ${gamePanelTopAccent} space-y-3 p-6`}>
-        <p className={gameLabel}>Hôte</p>
+        <p className={gameLabel}>Host</p>
         <p className="font-[family-name:var(--font-orbitron)] text-sm font-bold uppercase text-[var(--game-text)]">
-          Tu contrôles cette arène
+          You run this arena
         </p>
         <p className={gameMuted}>
-          Envoie le lien à ton adversaire : il devra se connecter, puis accepter avec un wallet qui a
-          au moins {formatUsdcLabel(duel.stakeUsdc)} USDC sur la chaîne du faucet.
+          Send the link to your opponent: they sign in, then accept with a wallet that has at least{" "}
+          {formatUsdcLabel(duel.stakeUsdc)} USDC on the faucet chain.
         </p>
         {duel.duelFull ? (
           <Link href={`/duel/${duelId}/prepare`} className={`${gameBtnPrimary} mt-2 !w-auto px-5`}>
-            Configurer mon trade
+            Set up my trade
           </Link>
         ) : null}
       </div>
@@ -222,16 +222,16 @@ export function DuelAcceptPanel({ duelId }: Props) {
   if (duel.viewer.isOpponent) {
     return (
       <div className={`${gamePanel} ${gamePanelTopAccent} space-y-3 p-6`}>
-        <p className={gameLabel}>Combattant</p>
+        <p className={gameLabel}>Fighter</p>
         <p className="font-[family-name:var(--font-orbitron)] text-sm font-bold uppercase text-[var(--game-text)]">
-          Tu es dans le match
+          You are in this match
         </p>
         <p className={gameMuted}>
-          Adversaire : <span className="font-semibold text-[var(--game-cyan)]">{duel.creatorPseudo}</span>
-          . Configure ton trade puis marque-toi prêt en même temps que l’hôte.
+          Opponent: <span className="font-semibold text-[var(--game-cyan)]">{duel.creatorPseudo}</span>. Set up
+          your trade and mark ready together with the host.
         </p>
         <Link href={`/duel/${duelId}/prepare`} className={`${gameBtnPrimary} mt-2 !w-auto px-5`}>
-          Configurer mon trade
+          Set up my trade
         </Link>
       </div>
     );
@@ -240,12 +240,12 @@ export function DuelAcceptPanel({ duelId }: Props) {
   if (duel.duelFull) {
     return (
       <div className={`${gamePanel} border-[var(--game-magenta-dim)] p-6`}>
-        <p className={gameLabel}>Match verrouillé</p>
+        <p className={gameLabel}>Match locked</p>
         <p className="font-[family-name:var(--font-orbitron)] text-sm font-bold text-[var(--game-text)]">
           {duel.creatorPseudo} <span className="text-[var(--game-amber)]">VS</span>{" "}
           {duel.opponentPseudo ?? "?"}
         </p>
-        <p className={`${gameMuted} mt-2`}>Tu ne peux pas rejoindre cette partie.</p>
+        <p className={`${gameMuted} mt-2`}>You cannot join this match.</p>
       </div>
     );
   }
@@ -253,10 +253,10 @@ export function DuelAcceptPanel({ duelId }: Props) {
   return (
     <div className={`${gamePanel} ${gamePanelTopAccent} space-y-4 p-6`}>
       <div className="space-y-2">
-        <p className={gameLabel}>Dernière ligne droite</p>
-        <h2 className={`${gameTitle} text-lg sm:text-xl`}>Accepter le duel</h2>
+        <p className={gameLabel}>Final step</p>
+        <h2 className={`${gameTitle} text-lg sm:text-xl`}>Accept duel</h2>
         <p className={gameMuted}>
-          Mise requise (chacun) :{" "}
+          Required stake (each):{" "}
           <span className="font-[family-name:var(--font-share-tech)] font-medium text-[var(--game-cyan)]">
             {formatUsdcLabel(duel.stakeUsdc)} USDC
           </span>
@@ -265,7 +265,7 @@ export function DuelAcceptPanel({ duelId }: Props) {
 
       {balanceLoading ? (
         <p className={`${gameMuted} font-[family-name:var(--font-orbitron)] text-xs uppercase tracking-wider`}>
-          Lecture du solde…
+          Reading balance…
         </p>
       ) : null}
 
@@ -274,23 +274,22 @@ export function DuelAcceptPanel({ duelId }: Props) {
           {!balance.configured ? (
             <p className="rounded-sm border border-[var(--game-amber)]/40 bg-[rgba(255,200,74,0.1)] px-3 py-2 text-[var(--game-amber)]">
               {balance.error ??
-                "Solde indisponible : vérifie FAUCET_RPC_URL et GNS_COLLATERAL_TOKEN_ADDRESS."}
+                "Balance unavailable — check FAUCET_RPC_URL and GNS_COLLATERAL_TOKEN_ADDRESS."}
             </p>
           ) : (
             <>
               <p>
-                <span className="text-[var(--game-text-muted)]">Ton solde : </span>
+                <span className="text-[var(--game-text-muted)]">Your balance: </span>
                 <span className="font-[family-name:var(--font-share-tech)] font-medium text-[var(--game-text)]">
                   {balance.formatted} USDC
                 </span>
               </p>
               {!canAccept ? (
                 <p className="text-[var(--game-danger)]">
-                  Solde insuffisant pour couvrir la mise. Utilise le faucet (getFreeDai) ou transfère
-                  des USDC sur ce wallet.
+                  Not enough balance for the stake. Use the faucet (getFreeDai) or send USDC to this wallet.
                 </p>
               ) : (
-                <p className="text-[var(--game-cyan)]">Prêt à entrer : solde OK.</p>
+                <p className="text-[var(--game-cyan)]">Ready to enter — balance OK.</p>
               )}
             </>
           )}
@@ -309,7 +308,7 @@ export function DuelAcceptPanel({ duelId }: Props) {
         onClick={() => void onJoin()}
         className={gameBtnPrimary}
       >
-        {joinLoading ? "Enregistrement…" : "Entrer dans l’arène"}
+        {joinLoading ? "Saving…" : "Enter the arena"}
       </button>
     </div>
   );

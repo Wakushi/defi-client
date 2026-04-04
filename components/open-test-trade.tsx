@@ -57,10 +57,10 @@ export function OpenTestTradeForm({ sessionUsername, collateralSelection }: Prop
   return (
     <div className={`${gamePanel} ${gamePanelTopAccent} mx-auto w-full max-w-md space-y-4 p-8`}>
       <div className="space-y-2">
-        <p className={gameLabel}>Mode entraînement</p>
+        <p className={gameLabel}>Training mode</p>
         <h2 className={`${gameTitle} text-lg sm:text-xl`}>Gains — openTrade test</h2>
         <p className={gameMuted}>
-          Dynamic MPC : mot de passe pour approve + openTrade. Collatéral = bloc « Montant pour le trade » (
+          Dynamic MPC: password signs approve + openTrade. Collateral = “Amount for trade” block (
           <span className="font-[family-name:var(--font-share-tech)] text-[var(--game-cyan)]">
             {collateralSelection
               ? (() => {
@@ -70,14 +70,13 @@ export function OpenTestTradeForm({ sessionUsername, collateralSelection }: Prop
                     return `${collateralSelection.collateralAmountRaw} (${collateralSelection.symbol})`;
                   }
                 })()
-              : "— choisis un montant —"}
+              : "— pick an amount above —"}
           </span>
           ).
           {sessionUsername ? (
             <>
               {" "}
-              Joueur :{" "}
-              <span className="font-semibold text-[var(--game-text)]">{sessionUsername}</span>.
+              Player: <span className="font-semibold text-[var(--game-text)]">{sessionUsername}</span>.
             </>
           ) : null}
         </p>
@@ -86,7 +85,7 @@ export function OpenTestTradeForm({ sessionUsername, collateralSelection }: Prop
         <input
           name="password"
           type="password"
-          placeholder="Mot de passe wallet (inscription)"
+          placeholder="Wallet password (same as sign-up)"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           className={gameInput}
@@ -94,7 +93,7 @@ export function OpenTestTradeForm({ sessionUsername, collateralSelection }: Prop
           required
         />
         <button type="submit" disabled={loading || !collateralSelection} className={gameBtnPrimary}>
-          {loading ? "Envoi…" : "Lancer le trade test"}
+          {loading ? "Sending…" : "Run test trade"}
         </button>
       </form>
       {error ? (

@@ -33,7 +33,7 @@ export function buildGnsTradeFromDuelConfig(
 
   const levX = Number(side.leverageX);
   if (!Number.isFinite(levX) || levX < 1 || levX > 500) {
-    throw new Error("leverageX doit être entre 1 et 500.");
+    throw new Error("leverageX must be between 1 and 500.");
   }
   const leverage = Math.floor(levX * 1000);
 
