@@ -86,6 +86,9 @@ type DuelPayload = {
   duelLiveAt: string | null
   /** Fin de chrono persistée (POST /close). */
   duelClosedAt: string | null
+  /** `execute-trade` déjà enregistré pour le viewer (reload sans re-signer). */
+  myTradeOpened: boolean
+  myOpenTradeTxHash: string | null
 }
 
 function formatUsdc(raw: string) {
@@ -232,6 +235,11 @@ export function DuelPrepareView() {
         return
       }
       setDuel(data)
+      if (data.myOpenTradeTxHash) {
+        setTxHash(data.myOpenTradeTxHash)
+      } else if (data.myTradeOpened) {
+        setTxHash(null)
+      }
       if (data.myTradeConfig) {
         setPairIndex(data.myTradeConfig.pairIndex)
         setLeverageX(data.myTradeConfig.leverageX)
@@ -337,8 +345,8 @@ export function DuelPrepareView() {
   /** Après la fin du 3-2-1 post-`start`, ou déjà « live » en base au reload. */
   const prepCountdownDone = Boolean(
     duel?.bothReady === true &&
-      (serverPastStartGate ||
-        (hasLocalStart && prepElapsed >= COUNTDOWN_TOTAL_MS)),
+    (serverPastStartGate ||
+      (hasLocalStart && prepElapsed >= COUNTDOWN_TOTAL_MS)),
   )
 
   const waitingWsStart =
@@ -347,10 +355,16 @@ export function DuelPrepareView() {
     duelStartSignalAt == null
 
   useLayoutEffect(() => {
-    if (!duel?.bothReady || txHash || autoSignStartedRef.current) return
+    if (
+      !duel?.bothReady ||
+      txHash ||
+      duel?.myTradeOpened ||
+      autoSignStartedRef.current
+    )
+      return
     autoSignStartedRef.current = true
     void onExecuteRef.current()
-  }, [duel?.bothReady, txHash])
+  }, [duel?.bothReady, duel?.myTradeOpened, txHash])
 
   async function onMarkReady() {
     if (!duelId) return
@@ -397,20 +411,30 @@ export function DuelPrepareView() {
         credentials: "include",
         body: JSON.stringify({}),
       })
-      const data = (await res.json()) as { error?: string; txHash?: string }
+      const data = (await res.json()) as {
+        error?: string
+        txHash?: string
+        already?: boolean
+      }
       if (!res.ok) {
         setExecError(data.error ?? "Failed.")
+        return
+      }
+      if (data.already) {
+        if (data.txHash) setTxHash(data.txHash)
+        await loadDuel()
         return
       }
       if (data.txHash) {
         setTxHash(data.txHash)
       }
+      await loadDuel()
     } catch {
       setExecError("Network error.")
     } finally {
       setExecLoading(false)
     }
-  }, [duelId, subscribePositions])
+  }, [duelId, subscribePositions, loadDuel])
 
   onExecuteRef.current = onExecute
 
@@ -581,177 +605,178 @@ export function DuelPrepareView() {
           <div className="space-y-4">
             {prepCountdownDone ? (
               <>
-            <div
-              className={`${gamePanel} ${gamePanelTopAccent} flex flex-wrap items-center justify-between gap-3 p-4`}
-            >
-              <div>
-                <p className={gameLabel}>Temps restant (duel)</p>
-                <p
-                  className={`font-[family-name:var(--font-orbitron)] text-2xl font-black tabular-nums tracking-wider sm:text-3xl ${
-                    duelTimerEnded || duelCountdownDisplay === 0
-                      ? "text-[var(--game-magenta)]"
-                      : "text-[var(--game-cyan)]"
-                  }`}
+                <div
+                  className={`${gamePanel} ${gamePanelTopAccent} flex flex-wrap items-center justify-between gap-3 p-4`}
                 >
-                  {duelCountdownDisplay === null && !duelTimerEnded ? (
-                    <span className="text-[var(--game-text-muted)]">…</span>
-                  ) : duelTimerEnded || duelCountdownDisplay === 0 ? (
-                    "0 s"
-                  ) : (
-                    <>{duelCountdownDisplay} s</>
-                  )}
-                </p>
-              </div>
-              <p className={`${gameMuted} max-w-md text-[11px]`}>
-                Les positions se mettent à jour en direct. Quand le chrono tombe
-                à 0, tes positions sont fermées au marché automatiquement (une
-                transaction par trade).
-              </p>
-            </div>
-
-            {duelTimerEnded && duelPnlOutcome ? (
-              <div
-                className={`${gamePanel} ${gamePanelTopAccent} space-y-4 p-6 ${
-                  duelPnlOutcome.winner === "you"
-                    ? "border-[var(--game-cyan)]/70 shadow-[0_0_32px_rgba(65,245,240,0.15)]"
-                    : duelPnlOutcome.winner === "opponent"
-                      ? "border-[var(--game-magenta)]/60"
-                      : ""
-                }`}
-              >
-                <p className={gameLabel}>Résultat du duel</p>
-                <h2
-                  className={`font-[family-name:var(--font-orbitron)] text-xl font-black uppercase tracking-wide sm:text-2xl ${
-                    duelPnlOutcome.winner === "you"
-                      ? "text-[var(--game-cyan)] [text-shadow:0_0_20px_rgba(65,245,240,0.45)]"
-                      : duelPnlOutcome.winner === "opponent"
-                        ? "text-[var(--game-magenta)] [text-shadow:0_0_18px_rgba(255,61,154,0.4)]"
-                        : duelPnlOutcome.winner === "tie"
-                          ? "text-[var(--game-amber)]"
-                          : "text-[var(--game-text-muted)]"
-                  }`}
-                >
-                  {duelPnlOutcome.winner === "you"
-                    ? "Victoire"
-                    : duelPnlOutcome.winner === "opponent"
-                      ? "Défaite"
-                      : duelPnlOutcome.winner === "tie"
-                        ? "Égalité"
-                        : "Score incomplet"}
-                </h2>
-                <p className={`${gameMuted} text-[12px]`}>
-                  Classement sur le{" "}
-                  <span className="font-semibold text-[var(--game-text)]">
-                    PnL en %
-                  </span>{" "}
-                  au dernier tick à ~1 s (ou dernier % connu si la position a
-                  été fermée avant la fin).
-                </p>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="rounded-sm border border-[var(--game-cyan-dim)]/50 bg-[rgba(0,0,0,0.35)] p-4">
-                    <p className={gameLabel}>Toi</p>
-                    <p className="truncate font-[family-name:var(--font-orbitron)] text-sm font-bold uppercase text-[var(--game-text)]">
-                      {myTradePseudo}
-                    </p>
-                    <p className="mt-2 font-[family-name:var(--font-orbitron)] text-lg font-bold tabular-nums text-[var(--game-cyan)]">
-                      {formatOutcomePct(duelPnlOutcome.myPnlPct)}
-                    </p>
-                    <p className="mt-1 font-[family-name:var(--font-share-tech)] text-xs text-[var(--game-text-muted)]">
-                      PnL USDC : {formatOutcomeUsdc(duelPnlOutcome.myPnlUsdc)}
+                  <div>
+                    <p className={gameLabel}>Temps restant (duel)</p>
+                    <p
+                      className={`font-[family-name:var(--font-orbitron)] text-2xl font-black tabular-nums tracking-wider sm:text-3xl ${
+                        duelTimerEnded || duelCountdownDisplay === 0
+                          ? "text-[var(--game-magenta)]"
+                          : "text-[var(--game-cyan)]"
+                      }`}
+                    >
+                      {duelCountdownDisplay === null && !duelTimerEnded ? (
+                        <span className="text-[var(--game-text-muted)]">…</span>
+                      ) : duelTimerEnded || duelCountdownDisplay === 0 ? (
+                        "0 s"
+                      ) : (
+                        <>{duelCountdownDisplay} s</>
+                      )}
                     </p>
                   </div>
-                  <div className="rounded-sm border border-[var(--game-cyan-dim)]/50 bg-[rgba(0,0,0,0.35)] p-4">
-                    <p className={gameLabel}>Adversaire</p>
-                    <p className="truncate font-[family-name:var(--font-orbitron)] text-sm font-bold uppercase text-[var(--game-text)]">
-                      {opponentTradePseudo}
-                    </p>
-                    <p className="mt-2 font-[family-name:var(--font-orbitron)] text-lg font-bold tabular-nums text-[var(--game-magenta)]">
-                      {formatOutcomePct(duelPnlOutcome.opponentPnlPct)}
-                    </p>
-                    <p className="mt-1 font-[family-name:var(--font-share-tech)] text-xs text-[var(--game-text-muted)]">
-                      PnL USDC :{" "}
-                      {formatOutcomeUsdc(duelPnlOutcome.opponentPnlUsdc)}
-                    </p>
-                  </div>
+                  <p className={`${gameMuted} max-w-md text-[11px]`}>
+                    Les positions se mettent à jour en direct. Quand le chrono
+                    tombe à 0, tes positions sont fermées au marché
+                    automatiquement (une transaction par trade).
+                  </p>
                 </div>
-              </div>
-            ) : null}
 
-            {duelAutoCloseBusy || duelAutoCloseResult ? (
-              <div
-                className={`rounded-sm border px-4 py-3 text-sm ${
-                  duelAutoCloseResult != null &&
-                  (duelAutoCloseResult.includes("partielle") ||
-                    duelAutoCloseResult.includes("erreur"))
-                    ? "border-[var(--game-danger)]/50 bg-[rgba(255,80,80,0.08)] text-[var(--game-text)]"
-                    : "border-[var(--game-cyan)]/40 bg-[rgba(65,245,240,0.08)] text-[var(--game-text)]"
-                }`}
-              >
-                {duelAutoCloseBusy ? (
-                  <p className="font-[family-name:var(--font-share-tech)] text-[13px] text-[var(--game-text)]">
-                    Fermeture automatique des positions au marché (une
-                    transaction par trade)…
-                  </p>
-                ) : duelAutoCloseResult ? (
-                  <p className="font-[family-name:var(--font-share-tech)] text-[13px]">
-                    {duelAutoCloseResult}
-                  </p>
+                {duelTimerEnded && duelPnlOutcome ? (
+                  <div
+                    className={`${gamePanel} ${gamePanelTopAccent} space-y-4 p-6 ${
+                      duelPnlOutcome.winner === "you"
+                        ? "border-[var(--game-cyan)]/70 shadow-[0_0_32px_rgba(65,245,240,0.15)]"
+                        : duelPnlOutcome.winner === "opponent"
+                          ? "border-[var(--game-magenta)]/60"
+                          : ""
+                    }`}
+                  >
+                    <p className={gameLabel}>Résultat du duel</p>
+                    <h2
+                      className={`font-[family-name:var(--font-orbitron)] text-xl font-black uppercase tracking-wide sm:text-2xl ${
+                        duelPnlOutcome.winner === "you"
+                          ? "text-[var(--game-cyan)] [text-shadow:0_0_20px_rgba(65,245,240,0.45)]"
+                          : duelPnlOutcome.winner === "opponent"
+                            ? "text-[var(--game-magenta)] [text-shadow:0_0_18px_rgba(255,61,154,0.4)]"
+                            : duelPnlOutcome.winner === "tie"
+                              ? "text-[var(--game-amber)]"
+                              : "text-[var(--game-text-muted)]"
+                      }`}
+                    >
+                      {duelPnlOutcome.winner === "you"
+                        ? "Victoire"
+                        : duelPnlOutcome.winner === "opponent"
+                          ? "Défaite"
+                          : duelPnlOutcome.winner === "tie"
+                            ? "Égalité"
+                            : "Score incomplet"}
+                    </h2>
+                    <p className={`${gameMuted} text-[12px]`}>
+                      Classement sur le{" "}
+                      <span className="font-semibold text-[var(--game-text)]">
+                        PnL en %
+                      </span>{" "}
+                      au dernier tick à ~1 s (ou dernier % connu si la position
+                      a été fermée avant la fin).
+                    </p>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="rounded-sm border border-[var(--game-cyan-dim)]/50 bg-[rgba(0,0,0,0.35)] p-4">
+                        <p className={gameLabel}>Toi</p>
+                        <p className="truncate font-[family-name:var(--font-orbitron)] text-sm font-bold uppercase text-[var(--game-text)]">
+                          {myTradePseudo}
+                        </p>
+                        <p className="mt-2 font-[family-name:var(--font-orbitron)] text-lg font-bold tabular-nums text-[var(--game-cyan)]">
+                          {formatOutcomePct(duelPnlOutcome.myPnlPct)}
+                        </p>
+                        <p className="mt-1 font-[family-name:var(--font-share-tech)] text-xs text-[var(--game-text-muted)]">
+                          PnL USDC :{" "}
+                          {formatOutcomeUsdc(duelPnlOutcome.myPnlUsdc)}
+                        </p>
+                      </div>
+                      <div className="rounded-sm border border-[var(--game-cyan-dim)]/50 bg-[rgba(0,0,0,0.35)] p-4">
+                        <p className={gameLabel}>Adversaire</p>
+                        <p className="truncate font-[family-name:var(--font-orbitron)] text-sm font-bold uppercase text-[var(--game-text)]">
+                          {opponentTradePseudo}
+                        </p>
+                        <p className="mt-2 font-[family-name:var(--font-orbitron)] text-lg font-bold tabular-nums text-[var(--game-magenta)]">
+                          {formatOutcomePct(duelPnlOutcome.opponentPnlPct)}
+                        </p>
+                        <p className="mt-1 font-[family-name:var(--font-share-tech)] text-xs text-[var(--game-text-muted)]">
+                          PnL USDC :{" "}
+                          {formatOutcomeUsdc(duelPnlOutcome.opponentPnlUsdc)}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
                 ) : null}
-              </div>
-            ) : null}
 
-            <div className="grid gap-4 lg:grid-cols-2">
-              {/* Gauche : ton trade · Droite : adversaire */}
-              <div className="min-w-0 space-y-2">
-                <div>
-                  <p className={gameLabel}>Ton trade</p>
-                  <p className="truncate font-[family-name:var(--font-orbitron)] text-base font-bold uppercase tracking-wide text-[var(--game-text)] sm:text-lg">
-                    {myTradePseudo}
-                  </p>
+                {duelAutoCloseBusy || duelAutoCloseResult ? (
+                  <div
+                    className={`rounded-sm border px-4 py-3 text-sm ${
+                      duelAutoCloseResult != null &&
+                      (duelAutoCloseResult.includes("partielle") ||
+                        duelAutoCloseResult.includes("erreur"))
+                        ? "border-[var(--game-danger)]/50 bg-[rgba(255,80,80,0.08)] text-[var(--game-text)]"
+                        : "border-[var(--game-cyan)]/40 bg-[rgba(65,245,240,0.08)] text-[var(--game-text)]"
+                    }`}
+                  >
+                    {duelAutoCloseBusy ? (
+                      <p className="font-[family-name:var(--font-share-tech)] text-[13px] text-[var(--game-text)]">
+                        Fermeture automatique des positions au marché (une
+                        transaction par trade)…
+                      </p>
+                    ) : duelAutoCloseResult ? (
+                      <p className="font-[family-name:var(--font-share-tech)] text-[13px]">
+                        {duelAutoCloseResult}
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                <div className="grid gap-4 lg:grid-cols-2">
+                  {/* Gauche : ton trade · Droite : adversaire */}
+                  <div className="min-w-0 space-y-2">
+                    <div>
+                      <p className={gameLabel}>Ton trade</p>
+                      <p className="truncate font-[family-name:var(--font-orbitron)] text-base font-bold uppercase tracking-wide text-[var(--game-text)] sm:text-lg">
+                        {myTradePseudo}
+                      </p>
+                    </div>
+                    <GainsLivePositionsPanel
+                      panelTitle="Positions (live)"
+                      positionCardLabel="Ta position"
+                      showConnectionMeta
+                      positions={myPositions}
+                      pnlHistoryByKey={pnlHistoryMy}
+                      historyKeyForPosition={(p) =>
+                        gainsPositionHistorySideKey("my", p)
+                      }
+                      connectionState={connectionState}
+                      lastWsError={lastWsError}
+                      gainsWallet={gainsWallet}
+                      gainsChain={gainsChain}
+                      wsDuelId={duelId}
+                      duelEnded={duelTimerEnded}
+                    />
+                  </div>
+                  <div className="min-w-0 space-y-2">
+                    <div>
+                      <p className={gameLabel}>Adversaire</p>
+                      <p className="truncate font-[family-name:var(--font-orbitron)] text-base font-bold uppercase tracking-wide text-[var(--game-text)] sm:text-lg">
+                        {opponentTradePseudo}
+                      </p>
+                    </div>
+                    <GainsLivePositionsPanel
+                      panelTitle="Positions (live)"
+                      positionCardLabel="Position adverse"
+                      readOnly
+                      showConnectionMeta={false}
+                      positions={opponentPositions}
+                      pnlHistoryByKey={pnlHistoryOpponent}
+                      historyKeyForPosition={(p) =>
+                        gainsPositionHistorySideKey("opponent", p)
+                      }
+                      connectionState={connectionState}
+                      lastWsError={lastWsError}
+                      gainsWallet={gainsWallet}
+                      gainsChain={gainsChain}
+                      wsDuelId={duelId}
+                      duelEnded={duelTimerEnded}
+                    />
+                  </div>
                 </div>
-                <GainsLivePositionsPanel
-                  panelTitle="Positions (live)"
-                  positionCardLabel="Ta position"
-                  showConnectionMeta
-                  positions={myPositions}
-                  pnlHistoryByKey={pnlHistoryMy}
-                  historyKeyForPosition={(p) =>
-                    gainsPositionHistorySideKey("my", p)
-                  }
-                  connectionState={connectionState}
-                  lastWsError={lastWsError}
-                  gainsWallet={gainsWallet}
-                  gainsChain={gainsChain}
-                  wsDuelId={duelId}
-                  duelEnded={duelTimerEnded}
-                />
-              </div>
-              <div className="min-w-0 space-y-2">
-                <div>
-                  <p className={gameLabel}>Adversaire</p>
-                  <p className="truncate font-[family-name:var(--font-orbitron)] text-base font-bold uppercase tracking-wide text-[var(--game-text)] sm:text-lg">
-                    {opponentTradePseudo}
-                  </p>
-                </div>
-                <GainsLivePositionsPanel
-                  panelTitle="Positions (live)"
-                  positionCardLabel="Position adverse"
-                  readOnly
-                  showConnectionMeta={false}
-                  positions={opponentPositions}
-                  pnlHistoryByKey={pnlHistoryOpponent}
-                  historyKeyForPosition={(p) =>
-                    gainsPositionHistorySideKey("opponent", p)
-                  }
-                  connectionState={connectionState}
-                  lastWsError={lastWsError}
-                  gainsWallet={gainsWallet}
-                  gainsChain={gainsChain}
-                  wsDuelId={duelId}
-                  duelEnded={duelTimerEnded}
-                />
-              </div>
-            </div>
               </>
             ) : null}
           </div>
@@ -897,27 +922,36 @@ export function DuelPrepareView() {
 
         {duel.bothReady &&
         (execError ||
-          (prepCountdownDone && (txHash || execLoading))) ? (
+          (prepCountdownDone &&
+            (txHash || execLoading || duel.myTradeOpened))) ? (
           <div
             className={`${gamePanel} ${gamePanelTopAccent} relative z-[45] space-y-4 p-6`}
           >
             <h2 className="font-[family-name:var(--font-orbitron)] text-sm font-bold uppercase text-[var(--game-amber)]">
               Trade launch
             </h2>
-            {execLoading && !txHash ? (
+            {execLoading && !txHash && !duel.myTradeOpened ? (
               <p className={gameMuted}>Signature en cours…</p>
+            ) : null}
+            {duel.myTradeOpened && !txHash && !execError && !execLoading ? (
+              <p className={gameMuted}>
+                Position déjà ouverte — reprise de session (pas de nouvelle
+                signature).
+              </p>
             ) : null}
             {execError ? (
               <div className="space-y-3">
                 <p className="text-sm text-[var(--game-danger)]">{execError}</p>
-                <button
-                  type="button"
-                  disabled={execLoading}
-                  onClick={() => void onRetrySign()}
-                  className="w-full rounded-sm border-2 border-[var(--game-magenta)] bg-transparent py-2.5 text-sm font-bold uppercase tracking-wider text-[var(--game-magenta)] transition enabled:hover:bg-[rgba(255,61,154,0.12)] disabled:opacity-50"
-                >
-                  Retry signing
-                </button>
+                {!duel.myTradeOpened ? (
+                  <button
+                    type="button"
+                    disabled={execLoading}
+                    onClick={() => void onRetrySign()}
+                    className="w-full rounded-sm border-2 border-[var(--game-magenta)] bg-transparent py-2.5 text-sm font-bold uppercase tracking-wider text-[var(--game-magenta)] transition enabled:hover:bg-[rgba(255,61,154,0.12)] disabled:opacity-50"
+                  >
+                    Retry signing
+                  </button>
+                ) : null}
               </div>
             ) : null}
             {txHash ? (

@@ -5,7 +5,7 @@ import { erc20Abi } from "@/constants/erc20"
 import { getSessionFromRequest } from "@/lib/auth/session"
 import { authenticatedEvmClient } from "@/lib/dynamic/evm-client"
 import { parseDuelTradeConfig, parseReadyState } from "@/lib/db/duel-ready"
-import { findDuelById } from "@/lib/db/duels"
+import { findDuelById, markParticipantOpenTradeRecorded } from "@/lib/db/duels"
 import { findUserById } from "@/lib/db/users"
 import { getFaucetChain, isFaucetChainConfigured } from "@/lib/evm/faucet-chain"
 import {
@@ -69,6 +69,19 @@ export async function POST(
       { error: "You are not in this duel." },
       { status: 403 },
     )
+  }
+
+  const alreadyOpenedAt = isCreator
+    ? duel.creator_trade_opened_at
+    : duel.opponent_trade_opened_at
+  const storedOpenTx = isCreator
+    ? duel.creator_open_trade_tx_hash
+    : duel.opponent_open_trade_tx_hash
+  if (alreadyOpenedAt != null) {
+    return NextResponse.json({
+      already: true as const,
+      ...(storedOpenTx ? { txHash: storedOpenTx } : {}),
+    })
   }
 
   const rawConfig = isCreator
@@ -188,6 +201,20 @@ export async function POST(
       walletAddress,
       trade,
     })
+
+    try {
+      await markParticipantOpenTradeRecorded(duelId, isCreator, txHash)
+    } catch (e) {
+      console.error("[duel execute] failed to record open trade:", e)
+      return NextResponse.json(
+        {
+          error:
+            "Trade was sent but the duel record could not be updated. Save this tx hash.",
+          txHash,
+        },
+        { status: 500 },
+      )
+    }
 
     return NextResponse.json({
       txHash,

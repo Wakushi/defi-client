@@ -30,6 +30,8 @@ type DuelApi = {
   viewer: { isCreator: boolean; isOpponent: boolean } | null;
   duelLiveAt?: string | null;
   duelClosedAt?: string | null;
+  myTradeOpened?: boolean;
+  myOpenTradeTxHash?: string | null;
 };
 
 type BalanceApi = {

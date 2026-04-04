@@ -151,10 +151,11 @@ export function GainsRealtimeProvider({
     number | null
   >(null)
   const [duelTimerEnded, setDuelTimerEnded] = useState(false)
-  const [duelPnlOutcome, setDuelPnlOutcome] = useState<GainsDuelPnlOutcome | null>(
+  const [duelPnlOutcome, setDuelPnlOutcome] =
+    useState<GainsDuelPnlOutcome | null>(null)
+  const [duelStartSignalAt, setDuelStartSignalAt] = useState<number | null>(
     null,
   )
-  const [duelStartSignalAt, setDuelStartSignalAt] = useState<number | null>(null)
 
   /** Legacy : même référence que mes positions pour l’historique combiné affiché ailleurs. */
   const [legacyPnlHistoryByKey, setLegacyPnlHistoryByKey] = useState(
@@ -478,15 +479,17 @@ export function GainsRealtimeProvider({
           if (event === "start") {
             const cur = subscribedDuelIdRef.current
             if (!cur) {
-              console.log(LOG, "socket: start ignored — no active duel subscription")
+              console.log(
+                LOG,
+                "socket: start ignored — no active duel subscription",
+              )
               return
             }
             const d =
               data && typeof data === "object"
                 ? (data as Record<string, unknown>)
                 : null
-            const id =
-              d && typeof d.duelId === "string" ? d.duelId.trim() : ""
+            const id = d && typeof d.duelId === "string" ? d.duelId.trim() : ""
             if (id && id !== cur) {
               console.log(LOG, "socket: start ignored — duelId mismatch", {
                 got: id,
@@ -496,7 +499,8 @@ export function GainsRealtimeProvider({
             }
             console.log(LOG, "socket: duel start signal", {
               duelId: cur,
-              message: d && typeof d.message === "string" ? d.message : undefined,
+              message:
+                d && typeof d.message === "string" ? d.message : undefined,
             })
             setDuelStartSignalAt(Date.now())
             return

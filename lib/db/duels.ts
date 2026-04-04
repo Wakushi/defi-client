@@ -75,3 +75,32 @@ export async function markDuelClosedIfUnset(duelId: string) {
     .where("duel_closed_at", "is", null)
     .execute()
 }
+
+/** Après open on-chain réussi — une entrée par joueur. */
+export async function markParticipantOpenTradeRecorded(
+  duelId: string,
+  isCreator: boolean,
+  txHash: string,
+) {
+  if (isCreator) {
+    await getDb()
+      .updateTable("duels")
+      .set({
+        creator_trade_opened_at: new Date(),
+        creator_open_trade_tx_hash: txHash,
+        updated_at: new Date(),
+      })
+      .where("id", "=", duelId)
+      .execute()
+    return
+  }
+  await getDb()
+    .updateTable("duels")
+    .set({
+      opponent_trade_opened_at: new Date(),
+      opponent_open_trade_tx_hash: txHash,
+      updated_at: new Date(),
+    })
+    .where("id", "=", duelId)
+    .execute()
+}

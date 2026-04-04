@@ -68,6 +68,16 @@ export async function GET(
         ? new Date(duel.duel_closed_at as string).toISOString()
         : null
 
+  let myTradeOpened = false
+  let myOpenTradeTxHash: string | null = null
+  if (viewer?.isCreator) {
+    myTradeOpened = duel.creator_trade_opened_at != null
+    myOpenTradeTxHash = duel.creator_open_trade_tx_hash ?? null
+  } else if (viewer?.isOpponent) {
+    myTradeOpened = duel.opponent_trade_opened_at != null
+    myOpenTradeTxHash = duel.opponent_open_trade_tx_hash ?? null
+  }
+
   return NextResponse.json({
     id: duel.id,
     creatorPseudo: duel.creator_pseudo,
@@ -84,5 +94,7 @@ export async function GET(
     myTradeConfig,
     duelLiveAt,
     duelClosedAt,
+    myTradeOpened,
+    myOpenTradeTxHash,
   })
 }

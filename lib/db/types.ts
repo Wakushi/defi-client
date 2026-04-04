@@ -29,6 +29,12 @@ export interface DuelsTable {
   duel_live_at: Date | null
   /** Fin du chrono duel (WS) enregistrée côté client/API. */
   duel_closed_at: Date | null
+  /** `execute-trade` réussi pour le créateur. */
+  creator_trade_opened_at: Date | null
+  /** `execute-trade` réussi pour l’adversaire. */
+  opponent_trade_opened_at: Date | null
+  creator_open_trade_tx_hash: string | null
+  opponent_open_trade_tx_hash: string | null
   created_at: Generated<Date>
   /** Renseigné par défaut côté SQL ; pas passé à l’insert Kysely. */
   updated_at: ColumnType<Date, never, Date>
