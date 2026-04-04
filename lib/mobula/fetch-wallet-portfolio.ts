@@ -33,7 +33,7 @@ export async function fetchMobulaWalletPortfolio(
 
   const url = new URL(`${base}/api/1/wallet/portfolio`);
   url.searchParams.set("wallet", options.wallet);
-  url.searchParams.set("cache", "true");
+  url.searchParams.set("cache", "false");
   url.searchParams.set("accuracy", "maximum");
 
   const minLiq = process.env.MOBULA_MIN_LIQ_USD?.trim();
@@ -46,6 +46,9 @@ export async function fetchMobulaWalletPortfolio(
   const blockchains = process.env.MOBULA_BLOCKCHAINS?.trim();
   if (blockchains) {
     url.searchParams.set("blockchains", blockchains);
+  } else if (mainnetOnly) {
+    // Default to the chains we support for duels
+    url.searchParams.set("blockchains", "arbitrum,base,ethereum");
   }
 
   if (!mainnetOnly && process.env.MOBULA_TESTNET === "true") {

@@ -113,6 +113,8 @@ export function DuelAcceptPanel({ duelId }: Props) {
   const [confirmingUsdc, setConfirmingUsdc] = useState(false);
   /** Après polling : le RPC voit bien assez d’USDC pour la mise. */
   const [balanceCoversStake, setBalanceCoversStake] = useState(false);
+  const [walletAddress, setWalletAddress] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
   /** Évite que le useEffect balance n’écrase le solde pendant le polling post-faucet. */
   const balancePollInProgressRef = useRef(false);
   const pollAbortRef = useRef<AbortController | null>(null);
@@ -365,6 +367,19 @@ export function DuelAcceptPanel({ duelId }: Props) {
     void loadBalance();
   }, [shouldLoadBalance, loadBalance, duel?.opponentChain, duel?.playMode]);
 
+  // Fetch wallet address for display
+  useEffect(() => {
+    if (!shouldLoadBalance) return;
+    void (async () => {
+      try {
+        const r = await fetch("/api/auth/me", { credentials: "include" });
+        const data = (await r.json()) as { user?: { walletAddress?: string } };
+        if (data.user?.walletAddress) setWalletAddress(data.user.walletAddress);
+      } catch { /* ignore */ }
+    })();
+  }, [shouldLoadBalance]);
+
+
   const canAccept = useMemo(() => {
     if (!duel || !balance?.configured) return false;
     const stakeN = Number(duel.stakeUsdc);
@@ -383,6 +398,13 @@ export function DuelAcceptPanel({ duelId }: Props) {
       return false;
     }
   }, [duel, balance]);
+
+  // Auto-refresh balance every 10s while insufficient
+  useEffect(() => {
+    if (!shouldLoadBalance || canAccept || balancePollInProgressRef.current) return;
+    const id = setInterval(() => void loadBalance(), 10_000);
+    return () => clearInterval(id);
+  }, [shouldLoadBalance, canAccept, loadBalance]);
 
   async function onClaimFaucet() {
     if (duel?.playMode === "duel") return;
@@ -698,6 +720,32 @@ export function DuelAcceptPanel({ duelId }: Props) {
                       </>
                     )}
                   </p>
+                  {walletAddress ? (
+                    <div className="rounded-sm border border-[var(--game-cyan-dim)]/40 bg-[rgba(4,2,12,0.5)] p-3 space-y-2">
+                      <p className="text-xs text-[var(--game-text-muted)]">
+                        Deposit tokens on Arbitrum to this wallet:
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <code className="min-w-0 flex-1 break-all font-[family-name:var(--font-share-tech)] text-xs text-[var(--game-cyan)]">
+                          {walletAddress}
+                        </code>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void navigator.clipboard.writeText(walletAddress);
+                            setCopied(true);
+                            setTimeout(() => setCopied(false), 2000);
+                          }}
+                          className="shrink-0 rounded-sm border border-[var(--game-cyan-dim)]/50 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-[var(--game-cyan)] transition hover:bg-[rgba(65,245,240,0.1)]"
+                        >
+                          {copied ? "Copied" : "Copy"}
+                        </button>
+                      </div>
+                      <p className="text-[10px] text-[var(--game-text-muted)]">
+                        Balance refreshes automatically every 10s.
+                      </p>
+                    </div>
+                  ) : null}
                   {duel.playMode !== "duel" ? (
                     <div className="space-y-2 rounded-sm border border-[var(--game-cyan-dim)]/40 bg-[rgba(4,2,12,0.5)] p-3">
                       {claimError ? (

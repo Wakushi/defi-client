@@ -30,7 +30,7 @@ export function isGainsExecSurfaceConfigured(surface: GainsExecSurface): boolean
   return Number.isInteger(id) && id > 0
 }
 
-function getArbitrumOneChainFromEnv(): Chain {
+export function getArbitrumOneChainFromEnv(): Chain {
   const url = process.env.ARBITRUM_RPC_URL?.trim()
   const id = Number(process.env.ARBITRUM_CHAIN_ID || 42161)
   if (!url || !Number.isInteger(id) || id <= 0) {

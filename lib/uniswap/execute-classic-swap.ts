@@ -36,6 +36,8 @@ export async function executeUniswapClassicSwapFlow(params: {
   walletAddress: Address;
   evmClient: DynamicEvmWalletClient;
   slippageTolerance?: number;
+  /** "EXACT_INPUT" (default) or "EXACT_OUTPUT". */
+  quoteType?: "EXACT_INPUT" | "EXACT_OUTPUT";
 }): Promise<ClassicSwapFlowResult> {
   const slippage = params.slippageTolerance ?? 0.5;
   const quoteHeaders: Record<string, string> = {};
@@ -75,10 +77,12 @@ export async function executeUniswapClassicSwapFlow(params: {
     }
   }
 
+  const quoteType = params.quoteType ?? "EXACT_INPUT";
+
   const quoteRes = await uniswapPostJson<UniswapQuoteResponse>(
     "/quote",
     {
-      type: "EXACT_INPUT",
+      type: quoteType,
       amount: params.amountStr,
       tokenIn: params.tokenIn,
       tokenOut: params.tokenOut,

@@ -80,6 +80,7 @@ export async function uniswapPostJson<T>(
   });
 
   const json = (await res.json().catch(() => (null))) as unknown;
+  console.log(`[uniswap-api] ${path} status=${res.status}`, JSON.stringify(json, null, 2)?.slice(0, 2000));
   if (!res.ok) {
     throw new Error(`Uniswap ${path} ${res.status}: ${parseUniswapError(json)}`);
   }
