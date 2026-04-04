@@ -3,7 +3,7 @@ import { getAddress, type Address } from "viem";
 
 import { getSessionFromRequest } from "@/lib/auth/session";
 import { findUserById } from "@/lib/db/users";
-import { getArbitrumOneChainFromEnv } from "@/lib/gns/gains-exec-context";
+import { getArbitrumOneChainFromEnv, getBaseChainFromEnv } from "@/lib/gns/gains-exec-context";
 import {
   UNISWAP_NATIVE_TOKEN,
   uniswapPostJson,
@@ -12,9 +12,12 @@ import {
 
 export const runtime = "nodejs";
 
-/** Arbitrum USDC (native). */
-const ARBITRUM_USDC = "0xaf88d065e77c8cC2239327C5EDb3A432268e5831" as const;
+const USDC_BY_CHAIN: Record<number, string> = {
+  42161: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831", // Arbitrum native USDC
+  8453: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",  // Base native USDC
+};
 const ARBITRUM_CHAIN_ID = 42161;
+const BASE_CHAIN_ID = 8453;
 
 /**
  * GET /api/trade/swap-quote?tokenIn=0x…&amount=1000000&chainId=42161
@@ -66,14 +69,30 @@ export async function GET(request: NextRequest) {
         { status: 503 },
       );
     }
+  } else if (chainId === BASE_CHAIN_ID) {
+    try {
+      getBaseChainFromEnv();
+    } catch (e) {
+      console.log("[swap-quote] BAIL: Base RPC not configured", e);
+      return NextResponse.json(
+        { error: "Base RPC not configured." },
+        { status: 503 },
+      );
+    }
+  }
+
+  const tokenOut = USDC_BY_CHAIN[chainId];
+  if (!tokenOut) {
+    return NextResponse.json(
+      { error: `Unsupported chain ${chainId}.` },
+      { status: 400 },
+    );
   }
 
   // Mobula uses 0xeee…eee for native ETH, Uniswap expects 0x000…000
   const MOBULA_NATIVE = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
   const normalizedTokenIn =
     tokenIn.toLowerCase() === MOBULA_NATIVE ? UNISWAP_NATIVE_TOKEN : tokenIn;
-
-  const tokenOut = ARBITRUM_USDC;
 
   // If tokenIn IS USDC, no swap needed
   try {

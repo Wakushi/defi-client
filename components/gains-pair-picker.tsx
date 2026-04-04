@@ -79,21 +79,6 @@ export function GainsPairPicker({
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-end gap-3">
-        <label className="block min-w-[10rem] flex-1 space-y-1">
-          <span className={gameLabel}>Gains API chain</span>
-          <select
-            value={chain}
-            disabled={disabled || chainSelectDisabled}
-            onChange={(e) => onChainChange(e.target.value as GainsApiChain)}
-            className={gameInput}
-          >
-            {options.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-        </label>
         <button
           type="button"
           disabled={disabled || loading}

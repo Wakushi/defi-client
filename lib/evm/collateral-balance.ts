@@ -44,7 +44,7 @@ export async function readCollateralBalanceForGainsChain(
     return readCollateralBalance(wallet)
   }
   try {
-    const rt = getGainsExecRuntime("arbitrum")
+    const rt = getGainsExecRuntime(surface)
     const publicClient = createPublicClient({
       chain: rt.chain,
       transport: http(rt.chain.rpcUrls.default.http[0]),

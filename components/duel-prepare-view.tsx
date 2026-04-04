@@ -6,7 +6,6 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
-  useMemo,
   useRef,
   useState,
 } from "react"
@@ -394,9 +393,18 @@ export function DuelPrepareView() {
   const participant =
     duel?.viewer && (duel.viewer.isCreator || duel.viewer.isOpponent)
 
-  const gainsPickerChainOptions = useMemo((): GainsApiChain[] => {
-    return duel?.playMode === "duel" ? ["Arbitrum", "Base"] : ["Testnet"]
-  }, [duel?.playMode])
+  /** Derive gainsChain from the selected collateral token's chain. */
+  useEffect(() => {
+    if (duel?.myExecGainsChain) return // already locked by server
+    if (duel?.playMode !== "duel") {
+      setGainsChain("Testnet")
+      return
+    }
+    if (!selectedToken) return
+    const numeric = extractNumericChainId(selectedToken.chainId)
+    if (numeric === "8453") setGainsChain("Base")
+    else if (numeric === "42161") setGainsChain("Arbitrum")
+  }, [selectedToken, duel?.playMode, duel?.myExecGainsChain])
 
   /** Booléen dérivé : évite un tableau de deps dont la « forme » change (warning React / Fast Refresh). */
   const shouldPollDuel =
@@ -536,7 +544,7 @@ export function DuelPrepareView() {
             body: JSON.stringify({
               tokenIn: selectedToken.tokenAddress,
               stakeUsdc: duel?.stakeUsdc ?? "0",
-              chainId: Number(extractNumericChainId(selectedToken.chainId) ?? "42161"),
+              chainId: Number(extractNumericChainId(selectedToken.chainId) ?? "0"),
             }),
           })
           const swapData = (await swapRes.json()) as {
@@ -980,7 +988,7 @@ export function DuelPrepareView() {
         {!duel.myReady && duel.playMode === "duel" ? (
           <TokenPicker
             stakeUsdc={duel.stakeUsdc}
-            chainId={gainsChain === "Arbitrum" ? "42161" : "42161"}
+            chainIds={["42161", "8453"]}
             onSelect={setSelectedToken}
             selected={selectedToken}
           />
@@ -995,18 +1003,11 @@ export function DuelPrepareView() {
               <p className={`${gameMuted} text-xs`}>
                 {duel.playMode === "duel" ? "Duel mode" : "Friendly mode"} — fixed chain for your trade:{" "}
                 <span className="text-[var(--game-cyan)]">{duel.myExecGainsChain}</span>
-                {duel.creatorChain != null && duel.opponentChain != null ? (
-                  <>
-                    {" "}
-                    (host {duel.creatorChain} · guest {duel.opponentChain})
-                  </>
-                ) : null}
               </p>
             ) : duel.playMode === "duel" ? (
               <p className={`${gameMuted} text-xs`}>
-                Duel mode — pick <span className="text-[var(--game-cyan)]">Arbitrum</span> or{" "}
-                <span className="text-[var(--game-cyan)]">Base</span> for your trade; the chain is saved
-                when you mark ready.
+                Duel mode — chain is determined by your collateral token (
+                <span className="text-[var(--game-cyan)]">{gainsChain}</span>).
               </p>
             ) : null}
             <div className="space-y-2">
@@ -1020,14 +1021,8 @@ export function DuelPrepareView() {
               </p>
               <GainsPairPicker
                 chain={gainsChain}
-                chainOptions={gainsPickerChainOptions}
-                chainSelectDisabled={Boolean(duel.myExecGainsChain)}
-                onChainChange={(c) => {
-                  setGainsChain(c)
-                  setPairIndex(0)
-                  setSelectedPairLabel("")
-                  setSelectedReferencePrice(null)
-                }}
+                chainSelectDisabled
+                onChainChange={() => {}}
                 selectedPairIndex={pairIndex}
                 onSelectPair={(p: GainsTradingPair) => {
                   setPairIndex(p.pairIndex)

@@ -10,11 +10,14 @@ import {
 } from "@/components/game-ui"
 import type { MobulaPortfolioPosition } from "@/types/mobula-portfolio"
 
-/** Arbitrum native USDC address (checksummed). */
-const ARBITRUM_USDC = "0xaf88d065e77c8cC2239327C5EDb3A432268e5831"
+/** USDC addresses per chain (checksummed). */
+const USDC_BY_CHAIN: Record<string, string> = {
+  "42161": "0xaf88d065e77c8cC2239327C5EDb3A432268e5831", // Arbitrum
+  "8453": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",  // Base
+}
 
 /** Chain IDs we support for swaps. */
-const SUPPORTED_CHAIN_IDS = new Set(["42161"])
+const SUPPORTED_CHAIN_IDS = new Set(["42161", "8453"])
 
 /** Extract numeric chain ID from Mobula format like "evm:42161" or plain "42161". */
 export function extractNumericChainId(raw: string): string | null {
@@ -44,14 +47,14 @@ export type SelectedToken = {
 
 export function TokenPicker({
   stakeUsdc,
-  chainId,
+  chainIds,
   onSelect,
   selected,
 }: {
   /** Human-readable stake amount, e.g. "10". */
   stakeUsdc: string
-  /** Chain ID string to filter tokens, e.g. "42161". */
-  chainId: string
+  /** Chain ID strings to filter tokens, e.g. ["42161", "8453"]. */
+  chainIds: string[]
   onSelect: (token: SelectedToken | null) => void
   selected: SelectedToken | null
 }) {
@@ -92,10 +95,11 @@ export function TokenPicker({
     void fetchPortfolio()
   }, [fetchPortfolio])
 
-  // Filter positions by supported chains (Mobula returns "evm:42161" format)
+  // Filter positions by requested chains (Mobula returns "evm:42161" format)
+  const allowedSet = new Set(chainIds)
   const filtered = positions.filter((p) => {
     const numeric = extractNumericChainId(p.chainId)
-    return numeric != null && SUPPORTED_CHAIN_IDS.has(numeric)
+    return numeric != null && SUPPORTED_CHAIN_IDS.has(numeric) && allowedSet.has(numeric)
   })
 
   // Sort: USDC first, then by USD value
@@ -127,7 +131,7 @@ export function TokenPicker({
         const params = new URLSearchParams({
           tokenIn: selected.tokenAddress,
           amount: raw6,
-          chainId: extractNumericChainId(selected.chainId) ?? "42161",
+          chainId: extractNumericChainId(selected.chainId) ?? "",
         })
         const res = await fetch(`/api/trade/swap-quote?${params}`, {
           credentials: "include",
@@ -203,7 +207,7 @@ export function TokenPicker({
         </div>
       ) : sorted.length === 0 ? (
         <p className={`${gameMuted} text-xs`}>
-          No tokens found on Arbitrum. Fund your wallet first.
+          No tokens found. Fund your wallet on Arbitrum or Base first.
         </p>
       ) : (
         <div className="space-y-1">
@@ -244,6 +248,9 @@ export function TokenPicker({
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-[family-name:var(--font-share-tech)] font-semibold text-[var(--game-text)]">
                       {pos.symbol}
+                      <span className="ml-1 text-[10px] font-normal text-[var(--game-text-muted)]">
+                        {extractNumericChainId(pos.chainId) === "8453" ? "Base" : "Arb"}
+                      </span>
                     </span>
                     <span className="font-[family-name:var(--font-share-tech)] text-xs text-[var(--game-text-muted)]">
                       ${pos.estimatedUsd.toFixed(2)}
@@ -305,7 +312,10 @@ export function TokenPicker({
 
 function isUsdcToken(pos: MobulaPortfolioPosition): boolean {
   try {
-    return pos.tokenAddress.toLowerCase() === ARBITRUM_USDC.toLowerCase()
+    const numeric = extractNumericChainId(pos.chainId)
+    const usdc = numeric ? USDC_BY_CHAIN[numeric] : null
+    if (!usdc) return false
+    return pos.tokenAddress.toLowerCase() === usdc.toLowerCase()
   } catch {
     return false
   }

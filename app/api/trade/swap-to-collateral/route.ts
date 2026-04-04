@@ -4,14 +4,18 @@ import { getAddress, parseUnits, type Address } from "viem";
 import { getSessionFromRequest } from "@/lib/auth/session";
 import { findUserById } from "@/lib/db/users";
 import { authenticatedEvmClient } from "@/lib/dynamic/evm-client";
-import { getArbitrumOneChainFromEnv } from "@/lib/gns/gains-exec-context";
+import { getArbitrumOneChainFromEnv, getBaseChainFromEnv } from "@/lib/gns/gains-exec-context";
 import { UNISWAP_NATIVE_TOKEN } from "@/lib/uniswap/trade-gateway";
 import { executeUniswapClassicSwapFlow } from "@/lib/uniswap/execute-classic-swap";
 
 export const runtime = "nodejs";
 
-const ARBITRUM_USDC = "0xaf88d065e77c8cC2239327C5EDb3A432268e5831" as const;
+const USDC_BY_CHAIN: Record<number, string> = {
+  42161: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831", // Arbitrum native USDC
+  8453: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",  // Base native USDC
+};
 const ARBITRUM_CHAIN_ID = 42161;
+const BASE_CHAIN_ID = 8453;
 
 /**
  * POST /api/trade/swap-to-collateral
@@ -68,13 +72,16 @@ export async function POST(request: NextRequest) {
   const tokenIn =
     rawTokenIn.toLowerCase() === MOBULA_NATIVE ? UNISWAP_NATIVE_TOKEN : rawTokenIn;
 
-  const tokenOut = ARBITRUM_USDC;
+  const tokenOut = USDC_BY_CHAIN[chainId];
+  if (!tokenOut) {
+    return NextResponse.json({ error: `Unsupported chain ${chainId}.` }, { status: 400 });
+  }
 
   // If tokenIn is already USDC, no swap needed
   try {
     if (
       tokenIn !== UNISWAP_NATIVE_TOKEN &&
-      getAddress(tokenIn as Address) === getAddress(tokenOut)
+      getAddress(tokenIn as Address) === getAddress(tokenOut as Address)
     ) {
       return NextResponse.json({ noSwapNeeded: true });
     }
@@ -87,9 +94,13 @@ export async function POST(request: NextRequest) {
 
   let chain;
   try {
-    chain = getArbitrumOneChainFromEnv();
+    if (chainId === BASE_CHAIN_ID) {
+      chain = getBaseChainFromEnv();
+    } else {
+      chain = getArbitrumOneChainFromEnv();
+    }
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "Arbitrum RPC not configured.";
+    const msg = e instanceof Error ? e.message : "RPC not configured.";
     return NextResponse.json({ error: msg }, { status: 503 });
   }
 
