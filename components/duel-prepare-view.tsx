@@ -13,7 +13,10 @@ import {
 
 import { GainsLivePositionsPanel } from "@/components/gains-live-positions-panel"
 import { GainsPairPicker } from "@/components/gains-pair-picker"
-import { useGainsRealtime } from "@/components/gains-realtime-context"
+import {
+  useGainsRealtime,
+  type GainsDuelPnlOutcome,
+} from "@/components/gains-realtime-context"
 import {
   GameHudBar,
   GameLogo,
@@ -116,6 +119,55 @@ function formatOutcomeUsdc(n: number | null): string {
   if (n == null || !Number.isFinite(n)) return "—"
   const s = n >= 0 ? "+" : ""
   return `${s}${formatUsdc(String(n))} USDC`
+}
+
+/** Mappe le snapshot WS fin de duel vers les champs créateur / adversaire en base. */
+function buildCloseOutcomeBody(
+  viewer: { isCreator: boolean; isOpponent: boolean } | null,
+  outcome: GainsDuelPnlOutcome | null,
+): Record<string, number> {
+  if (!viewer || !outcome) return {}
+  const body: Record<string, number> = {}
+  if (viewer.isCreator) {
+    if (outcome.myPnlUsdc != null && Number.isFinite(outcome.myPnlUsdc)) {
+      body.creatorPnlUsdc = outcome.myPnlUsdc
+    }
+    if (
+      outcome.opponentPnlUsdc != null &&
+      Number.isFinite(outcome.opponentPnlUsdc)
+    ) {
+      body.opponentPnlUsdc = outcome.opponentPnlUsdc
+    }
+    if (outcome.myPnlPct != null && Number.isFinite(outcome.myPnlPct)) {
+      body.creatorPnlPct = outcome.myPnlPct
+    }
+    if (
+      outcome.opponentPnlPct != null &&
+      Number.isFinite(outcome.opponentPnlPct)
+    ) {
+      body.opponentPnlPct = outcome.opponentPnlPct
+    }
+  } else if (viewer.isOpponent) {
+    if (outcome.myPnlUsdc != null && Number.isFinite(outcome.myPnlUsdc)) {
+      body.opponentPnlUsdc = outcome.myPnlUsdc
+    }
+    if (
+      outcome.opponentPnlUsdc != null &&
+      Number.isFinite(outcome.opponentPnlUsdc)
+    ) {
+      body.creatorPnlUsdc = outcome.opponentPnlUsdc
+    }
+    if (outcome.myPnlPct != null && Number.isFinite(outcome.myPnlPct)) {
+      body.opponentPnlPct = outcome.myPnlPct
+    }
+    if (
+      outcome.opponentPnlPct != null &&
+      Number.isFinite(outcome.opponentPnlPct)
+    ) {
+      body.creatorPnlPct = outcome.opponentPnlPct
+    }
+  }
+  return body
 }
 
 export function DuelPrepareView() {
@@ -233,7 +285,7 @@ export function DuelPrepareView() {
   const [txHash, setTxHash] = useState<string | null>(null)
   /** Une seule auto-signature quand les deux sont prêts (pas liée à l’event WS `start`). */
   const autoSignStartedRef = useRef(false)
-  const closedPostedRef = useRef(false)
+  const closePayloadKeySentRef = useRef("")
   const txHashRef = useRef(txHash)
   const onExecuteRef = useRef<() => Promise<void>>(async () => {})
   txHashRef.current = txHash
@@ -291,7 +343,7 @@ export function DuelPrepareView() {
 
   useEffect(() => {
     autoSignStartedRef.current = false
-    closedPostedRef.current = false
+    closePayloadKeySentRef.current = ""
   }, [duelId])
 
   /** Persiste « duel live » côté serveur dès réception du WS `start` (reload sans ré-attendre). */
@@ -315,17 +367,25 @@ export function DuelPrepareView() {
     })
   }, [duelStartSignalAt, duelId, loadDuel])
 
-  /** Persiste la fin du chrono duel en base (état « fermé »). */
+  /** Persiste la fin du chrono + PnL (requêtes idempotentes ; nouvelle clé si le WS remplit le outcome après coup). */
   useEffect(() => {
-    if (!duelTimerEnded || !duelId || closedPostedRef.current) return
-    closedPostedRef.current = true
+    if (!duelTimerEnded || !duelId) return
+    const viewer = duel?.viewer
+    const v =
+      viewer && (viewer.isCreator || viewer.isOpponent) ? viewer : null
+    const body = buildCloseOutcomeBody(v, duelPnlOutcome)
+    const key = JSON.stringify(body)
+    if (key === closePayloadKeySentRef.current) return
+    closePayloadKeySentRef.current = key
     void fetch(`/api/duels/${duelId}/close`, {
       method: "POST",
       credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
     }).then((r) => {
       if (r.ok) void loadDuel()
     })
-  }, [duelTimerEnded, duelId, loadDuel])
+  }, [duelTimerEnded, duelId, loadDuel, duelPnlOutcome, duel?.viewer])
 
   const participant =
     duel?.viewer && (duel.viewer.isCreator || duel.viewer.isOpponent)

@@ -29,6 +29,13 @@ export interface DuelsTable {
   duel_live_at: Date | null
   /** Fin du chrono duel (WS) enregistrée côté client/API. */
   duel_closed_at: Date | null
+  /** PnL USDC finaux (snapshot WS fin de duel), par rôle. */
+  creator_pnl_usdc: string | null
+  opponent_pnl_usdc: string | null
+  creator_pnl_pct: number | null
+  opponent_pnl_pct: number | null
+  /** `creator` | `opponent` | `tie` — dérivé des PnL quand disponibles. */
+  duel_winner_side: string | null
   /** `execute-trade` réussi pour le créateur. */
   creator_trade_opened_at: Date | null
   /** `execute-trade` réussi pour l’adversaire. */

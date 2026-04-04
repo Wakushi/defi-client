@@ -107,6 +107,14 @@ export function HomeAuth() {
         <div className={`${gamePanel} ${gamePanelTopAccent} p-6 sm:p-8`}>
           <p className={`${gameTitle} mb-4 text-lg sm:text-xl`}>Menu</p>
           <HubPlayModeMenu />
+          <div className="mt-4">
+            <Link
+              href="/duel/history"
+              className={`${gameBtnGhost} inline-flex !w-full border-[var(--game-cyan-dim)] text-[var(--game-cyan)] sm:!w-auto`}
+            >
+              Duel history
+            </Link>
+          </div>
           <OpenDuelsMenu />
         </div>
 
