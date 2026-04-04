@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { parseUnits } from "viem";
 
 import {
@@ -38,6 +39,8 @@ type BalanceApi = {
 
 type Props = { duelId: string };
 
+const LOBBY_POLL_MS = 1000;
+
 function formatUsdcLabel(raw: string) {
   const n = Number(raw);
   if (!Number.isFinite(n)) return raw;
@@ -48,6 +51,8 @@ function formatUsdcLabel(raw: string) {
 }
 
 export function DuelAcceptPanel({ duelId }: Props) {
+  const router = useRouter();
+  const prepRedirectedRef = useRef(false);
   const [authMode, setAuthMode] = useState<"login" | "signup">("login");
   const [duel, setDuel] = useState<DuelApi | null>(null);
   const [duelError, setDuelError] = useState<string | null>(null);
@@ -57,9 +62,10 @@ export function DuelAcceptPanel({ duelId }: Props) {
   const [joinLoading, setJoinLoading] = useState(false);
   const [joinError, setJoinError] = useState<string | null>(null);
 
-  const loadDuel = useCallback(async () => {
+  const loadDuel = useCallback(async (opts?: { silent?: boolean }) => {
+    const silent = opts?.silent === true;
     setDuelError(null);
-    setDuelLoading(true);
+    if (!silent) setDuelLoading(true);
     try {
       const r = await fetch(`/api/duels/${duelId}`, { credentials: "include" });
       const data = (await r.json()) as DuelApi & { error?: string };
@@ -73,7 +79,7 @@ export function DuelAcceptPanel({ duelId }: Props) {
       setDuel(null);
       setDuelError("Network error.");
     } finally {
-      setDuelLoading(false);
+      if (!silent) setDuelLoading(false);
     }
   }, [duelId]);
 
@@ -102,8 +108,29 @@ export function DuelAcceptPanel({ duelId }: Props) {
   }, []);
 
   useEffect(() => {
+    prepRedirectedRef.current = false;
+  }, [duelId]);
+
+  useEffect(() => {
     void loadDuel();
   }, [loadDuel]);
+
+  const creatorWaitingOpponent =
+    Boolean(duel?.viewer?.isCreator) && duel && !duel.duelFull;
+
+  useEffect(() => {
+    if (!creatorWaitingOpponent) return;
+    const id = setInterval(() => void loadDuel({ silent: true }), LOBBY_POLL_MS);
+    return () => clearInterval(id);
+  }, [creatorWaitingOpponent, loadDuel]);
+
+  useEffect(() => {
+    if (!duel?.duelFull || prepRedirectedRef.current) return;
+    const v = duel.viewer;
+    if (!v?.isCreator && !v?.isOpponent) return;
+    prepRedirectedRef.current = true;
+    router.replace(`/duel/${duelId}/prepare`);
+  }, [duel?.duelFull, duel?.viewer, duelId, router]);
 
   const shouldLoadBalance =
     duel?.viewer &&
@@ -139,7 +166,7 @@ export function DuelAcceptPanel({ duelId }: Props) {
         setJoinError(data.error ?? "Could not accept duel.");
         return;
       }
-      await loadDuel();
+      await loadDuel({ silent: true });
     } catch {
       setJoinError("Network error.");
     } finally {
@@ -210,11 +237,15 @@ export function DuelAcceptPanel({ duelId }: Props) {
           Send the link to your opponent: they sign in, then accept with a wallet that has at least{" "}
           {formatUsdcLabel(duel.stakeUsdc)} USDC on the faucet chain.
         </p>
-        {duel.duelFull ? (
-          <Link href={`/duel/${duelId}/prepare`} className={`${gameBtnPrimary} mt-2 !w-auto px-5`}>
-            Set up my trade
-          </Link>
-        ) : null}
+        {!duel.duelFull ? (
+          <p
+            className={`${gameMuted} font-[family-name:var(--font-orbitron)] text-xs uppercase tracking-wider text-[var(--game-amber)]`}
+          >
+            Waiting for opponent… (checking every second)
+          </p>
+        ) : (
+          <p className={`${gameMuted} text-xs`}>Opening trade prep…</p>
+        )}
       </div>
     );
   }
@@ -230,9 +261,7 @@ export function DuelAcceptPanel({ duelId }: Props) {
           Opponent: <span className="font-semibold text-[var(--game-cyan)]">{duel.creatorPseudo}</span>. Set up
           your trade and mark ready together with the host.
         </p>
-        <Link href={`/duel/${duelId}/prepare`} className={`${gameBtnPrimary} mt-2 !w-auto px-5`}>
-          Set up my trade
-        </Link>
+        <p className={`${gameMuted} text-xs`}>Opening trade prep…</p>
       </div>
     );
   }

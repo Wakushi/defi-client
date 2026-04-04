@@ -82,14 +82,6 @@ export default async function DuelLobbyPage({ params }: Props) {
           </p>
         </div>
 
-        {duel.opponent_pseudo ? (
-          <p className="text-center">
-            <Link href={`/duel/${duel.id}/prepare`} className={`${gameLink} text-base font-bold uppercase tracking-wider`}>
-              → Combat prep (trade)
-            </Link>
-          </p>
-        ) : null}
-
         <DuelAcceptPanel duelId={duel.id} />
 
         <Link href="/" className={`${gameLink} text-center`}>

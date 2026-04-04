@@ -192,11 +192,17 @@ export function DuelPrepareView() {
   const participant =
     duel?.viewer && (duel.viewer.isCreator || duel.viewer.isOpponent);
 
+  /** Booléen dérivé : évite un tableau de deps dont la « forme » change (warning React / Fast Refresh). */
+  const shouldPollDuel =
+    Boolean(duel?.duelFull) && Boolean(participant) && !duel?.bothReady;
+
+  /** Tant que les deux ne sont pas « ready », on resynchronise l’état (l’autre joueur peut marquer prêt). Après `bothReady`, compte à rebours + sign local — plus de requêtes périodiques. */
   useEffect(() => {
-    if (!duel?.duelFull || !participant) return;
+    if (!shouldPollDuel) return;
+
     const id = setInterval(() => void loadDuel(), POLL_MS);
     return () => clearInterval(id);
-  }, [duel?.duelFull, participant, loadDuel]);
+  }, [shouldPollDuel, loadDuel]);
 
   useEffect(() => {
     if (!duel?.bothReady || !duel.readyBothAt) return;
