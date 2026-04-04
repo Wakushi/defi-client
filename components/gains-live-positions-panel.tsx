@@ -269,6 +269,8 @@ export type GainsLivePositionsPanelProps = {
   lastWsError: string | null;
   gainsWallet: string | null;
   gainsChain: GainsApiChain;
+  /** UUID duel envoyé au WS `subscribe` (stream par match). */
+  wsDuelId?: string;
   /** Pour fermeture on-chain si le backup Dynamic est chiffré (wallet ancien). */
   walletPassword?: string;
 };
@@ -280,6 +282,7 @@ export function GainsLivePositionsPanel({
   lastWsError,
   gainsWallet,
   gainsChain,
+  wsDuelId = "",
   walletPassword = "",
 }: GainsLivePositionsPanelProps) {
   const [localClosePassword, setLocalClosePassword] = useState("");
@@ -414,7 +417,22 @@ export function GainsLivePositionsPanel({
           ))}
         </ul>
       ) : connectionState === "open" ? (
-        <p className={gameMuted}>Waiting for position ticks (subscribe sent for {gainsChain})…</p>
+        <p className={gameMuted}>
+          Waiting for position ticks
+          {wsDuelId.trim() ? (
+            <>
+              {" "}
+              (<code className="text-[var(--game-cyan)]">subscribe</code> duel{" "}
+              <span className="font-[family-name:var(--font-share-tech)] text-[var(--game-text)]">
+                {wsDuelId.slice(0, 8)}…
+              </span>
+              )
+            </>
+          ) : (
+            <> ({gainsChain})</>
+          )}
+          …
+        </p>
       ) : null}
     </div>
   );

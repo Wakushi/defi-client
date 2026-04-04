@@ -12,7 +12,6 @@ import {
 
 import {
   gainsPositionStreamKey,
-  type GainsApiChain,
   type GainsPositionPnlTick,
   type GainsPositionUpdate,
 } from "@/types/gains-api";
@@ -55,7 +54,7 @@ type GainsRealtimeContextValue = {
   positions: GainsPositionUpdate[];
   /** Historique PnL par position (clé stable) — mis à jour dans le handler WebSocket. */
   pnlHistoryByKey: ReadonlyMap<string, GainsPositionPnlTick[]>;
-  subscribePositions: (chain: GainsApiChain) => void;
+  subscribePositions: (duelId: string) => void;
   unsubscribePositions: () => void;
 };
 
@@ -94,6 +93,8 @@ export function GainsRealtimeProvider({ children }: { children: React.ReactNode 
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectAttemptRef = useRef(0);
   const intentionalUnmountRef = useRef(false);
+  /** Dernier duel souscrit (pour unsubscribe / cleanup alignés sur le serveur). */
+  const subscribedDuelIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     console.log(LOG, "session: fetching /api/auth/me (duel layout mounted)");
@@ -237,7 +238,10 @@ export function GainsRealtimeProvider({ children }: { children: React.ReactNode 
       const w = wsRef.current;
       if (w) {
         try {
-          const payload = JSON.stringify({ event: "unsubscribe", data: {} });
+          const duelId = subscribedDuelIdRef.current;
+          const payload = JSON.stringify(
+            duelId ? { event: "unsubscribe", data: { duelId } } : { event: "unsubscribe", data: {} },
+          );
           console.log(LOG, "socket: send on cleanup", payload);
           w.send(payload);
         } catch (e) {
@@ -246,11 +250,17 @@ export function GainsRealtimeProvider({ children }: { children: React.ReactNode 
         w.close();
         wsRef.current = null;
       }
+      subscribedDuelIdRef.current = null;
     };
   }, [walletAddress]);
 
   const subscribePositions = useCallback(
-    (chain: GainsApiChain) => {
+    (duelId: string) => {
+      const id = duelId.trim();
+      if (!id) {
+        console.log(LOG, "subscribe: skipped — empty duelId");
+        return;
+      }
       if (!walletAddress) {
         console.log(LOG, "subscribe: skipped — no wallet");
         return;
@@ -266,8 +276,9 @@ export function GainsRealtimeProvider({ children }: { children: React.ReactNode 
       }
       const payload = {
         event: "subscribe",
-        data: { chain, user: walletAddress },
+        data: { duelId: id },
       };
+      subscribedDuelIdRef.current = id;
       console.log(LOG, "subscribe: sending", payload);
       setPositions([]);
       setPnlHistoryByKey(new Map());
@@ -288,12 +299,16 @@ export function GainsRealtimeProvider({ children }: { children: React.ReactNode 
       return;
     }
     try {
-      const body = JSON.stringify({ event: "unsubscribe", data: {} });
+      const duelId = subscribedDuelIdRef.current;
+      const body = JSON.stringify(
+        duelId ? { event: "unsubscribe", data: { duelId } } : { event: "unsubscribe", data: {} },
+      );
       console.log(LOG, "unsubscribe: sending", body);
       ws.send(body);
     } catch (e) {
       console.warn(LOG, "unsubscribe: send failed", e);
     }
+    subscribedDuelIdRef.current = null;
     setPositions([]);
     setPnlHistoryByKey(new Map());
   }, []);

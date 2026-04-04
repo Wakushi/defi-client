@@ -213,9 +213,9 @@ export function DuelPrepareView() {
   }, [duel?.bothReady, duel?.readyBothAt]);
 
   useEffect(() => {
-    if (!duel?.bothReady || !participant) return;
-    subscribePositions(gainsChain);
-  }, [duel?.bothReady, participant, gainsChain, subscribePositions]);
+    if (!duel?.bothReady || !participant || !duelId) return;
+    subscribePositions(duelId);
+  }, [duel?.bothReady, participant, duelId, subscribePositions]);
 
   const cd = useMemo(() => {
     if (!duel?.bothReady || !duel.readyBothAt) return null;
@@ -261,7 +261,7 @@ export function DuelPrepareView() {
 
   const onExecute = useCallback(async () => {
     if (!duelId) return;
-    subscribePositions(gainsChain);
+    subscribePositions(duelId);
     setExecError(null);
     setExecLoading(true);
     try {
@@ -288,7 +288,7 @@ export function DuelPrepareView() {
     } finally {
       setExecLoading(false);
     }
-  }, [duelId, dynamicWalletPassword, gainsChain, subscribePositions]);
+  }, [duelId, dynamicWalletPassword, subscribePositions]);
 
   onExecuteRef.current = onExecute;
 
@@ -444,6 +444,7 @@ export function DuelPrepareView() {
           lastWsError={lastWsError}
           gainsWallet={gainsWallet}
           gainsChain={gainsChain}
+          wsDuelId={duelId}
           walletPassword={dynamicWalletPassword}
         />
 
