@@ -45,6 +45,7 @@ export function WalletProfile({ walletAddress }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [payload, setPayload] = useState<MobulaPortfolioPayload | null>(null);
   const [withdrawOpen, setWithdrawOpen] = useState(false);
+  const [clipboardNotice, setClipboardNotice] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -72,6 +73,21 @@ export function WalletProfile({ walletAddress }: Props) {
   useEffect(() => {
     void load();
   }, [load, walletAddress, playMode]);
+
+  useEffect(() => {
+    if (!clipboardNotice) return;
+    const t = window.setTimeout(() => setClipboardNotice(null), 3200);
+    return () => window.clearTimeout(t);
+  }, [clipboardNotice]);
+
+  const copyWalletForDeposit = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(walletAddress.trim());
+      setClipboardNotice("Wallet address copied to clipboard.");
+    } catch {
+      setClipboardNotice("Could not copy to clipboard.");
+    }
+  }, [walletAddress]);
 
   const canWithdraw =
     Boolean(payload && payload.positions.length > 0 && !loading && !error);
@@ -112,6 +128,13 @@ export function WalletProfile({ walletAddress }: Props) {
             Holdings
           </p>
           <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void copyWalletForDeposit()}
+              className={`${gameBtnGhost} !w-auto shrink-0 border-[var(--game-cyan-dim)] text-[var(--game-cyan)]`}
+            >
+              Deposit
+            </button>
             <button
               type="button"
               onClick={() => setWithdrawOpen(true)}
@@ -197,6 +220,18 @@ export function WalletProfile({ walletAddress }: Props) {
         positions={payload?.positions ?? []}
         onSuccess={() => void load()}
       />
+
+      {clipboardNotice ? (
+        <div
+          className="pointer-events-none fixed bottom-6 left-1/2 z-[70] max-w-[min(90vw,20rem)] -translate-x-1/2 rounded-sm border border-[var(--game-cyan)]/50 bg-[rgba(4,2,12,0.92)] px-4 py-3 text-center shadow-[0_0_32px_rgba(65,245,240,0.2)] backdrop-blur-sm"
+          role="status"
+          aria-live="polite"
+        >
+          <p className="font-[family-name:var(--font-share-tech)] text-sm text-[var(--game-cyan)]">
+            {clipboardNotice}
+          </p>
+        </div>
+      ) : null}
     </div>
   );
 }

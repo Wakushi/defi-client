@@ -119,8 +119,11 @@ export async function dynamicSignAndSendTransaction(params: {
   to: Address
   data: Hex
   chain?: Chain
+  /** Wei envoyés avec la tx (ETH natif ou autre valeur). */
+  value?: bigint
 }): Promise<`0x${string}`> {
   const chain = params.chain ?? getFaucetChain()
+  const value = params.value ?? BigInt(0)
   const transport = http(chain.rpcUrls.default.http[0])
   const publicClient = createPublicClient({ chain, transport })
 
@@ -132,12 +135,14 @@ export async function dynamicSignAndSendTransaction(params: {
     account: params.walletAddress,
     to: params.to,
     data: params.data,
+    value,
   })
 
   const estimated = await publicClient.estimateGas({
     account: params.walletAddress,
     to: params.to,
     data: params.data,
+    value,
   })
   const gas = applyGasBuffer(estimated, params.data)
   const fees = await getEip1559Fees(publicClient)
@@ -148,6 +153,7 @@ export async function dynamicSignAndSendTransaction(params: {
     nonce,
     to: params.to,
     data: params.data,
+    value,
     gas,
     maxFeePerGas: fees.maxFeePerGas,
     maxPriorityFeePerGas: fees.maxPriorityFeePerGas,

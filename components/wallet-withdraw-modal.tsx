@@ -129,8 +129,8 @@ export function WalletWithdrawModal({
             Withdraw funds
           </h2>
           <p className={`${gameMuted} mt-1 text-xs`}>
-            ERC-20 transfer from your embedded wallet to an external address. Double-check the network
-            and recipient. You also need a small amount of the native asset (ETH) on that chain for gas.
+            Send ERC-20 tokens or native ETH from your embedded wallet. Double-check the network and
+            recipient. For token withdrawals you still need a small amount of native gas on that chain.
           </p>
         </div>
 

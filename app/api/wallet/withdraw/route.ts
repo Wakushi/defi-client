@@ -5,7 +5,9 @@ import {
   getAddress,
   http,
   parseUnits,
+  zeroAddress,
   type Address,
+  type Hex,
 } from "viem";
 
 import { erc20Abi } from "@/constants/erc20";
@@ -17,7 +19,15 @@ import { resolveChainForWithdraw } from "@/lib/evm/withdraw-chain";
 
 export const runtime = "nodejs";
 
-const ZERO = "0x0000000000000000000000000000000000000000" as Address;
+/** Placeholders « ETH natif » côté indexeurs (Mobula, etc.) — pas de contrat ERC-20 à ces adresses. */
+const NATIVE_TOKEN_PLACEHOLDERS = new Set([
+  zeroAddress.toLowerCase(),
+  "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+]);
+
+function isNativeWithdrawToken(token: Address): boolean {
+  return NATIVE_TOKEN_PLACEHOLDERS.has(token.toLowerCase());
+}
 
 export async function POST(request: NextRequest) {
   const session = await getSessionFromRequest(request);
@@ -79,16 +89,6 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  if (token === ZERO) {
-    return NextResponse.json(
-      {
-        error:
-          "Native ETH withdrawal is not supported here — use an ERC-20 token.",
-      },
-      { status: 400 },
-    );
-  }
-
   const resolved = resolveChainForWithdraw(chainIdRaw);
   if (!resolved.ok) {
     return NextResponse.json({ error: resolved.error }, { status: 400 });
@@ -107,86 +107,153 @@ export async function POST(request: NextRequest) {
   const transport = http(chain.rpcUrls.default.http[0]);
   const publicClient = createPublicClient({ chain, transport });
 
-  let decimals: number;
-  try {
-    decimals = await publicClient.readContract({
-      address: token,
-      abi: erc20Abi,
-      functionName: "decimals",
-    });
-  } catch {
-    return NextResponse.json(
-      {
-        error:
-          "Could not read token decimals (wrong chain or not an ERC-20 contract?).",
-      },
-      { status: 400 },
-    );
-  }
-
-  if (!Number.isInteger(decimals) || decimals < 0 || decimals > 36) {
-    return NextResponse.json(
-      { error: "Token decimals look invalid." },
-      { status: 400 },
-    );
-  }
-
+  let sendTo: Address;
+  let sendData: Hex;
+  let sendValue: bigint | undefined;
   let balance: bigint;
-  try {
-    balance = await publicClient.readContract({
-      address: token,
-      abi: erc20Abi,
-      functionName: "balanceOf",
-      args: [walletAddress],
-    });
-  } catch {
-    return NextResponse.json(
-      { error: "Could not read token balance." },
-      { status: 502 },
-    );
-  }
-
   let amountWei: bigint;
-  if (amountMax) {
-    amountWei = balance;
-  } else {
+
+  if (isNativeWithdrawToken(token)) {
+    const nativeDecimals = chain.nativeCurrency.decimals;
     try {
-      amountWei = parseUnits(amountStr, decimals);
+      balance = await publicClient.getBalance({ address: walletAddress });
     } catch {
-      return NextResponse.json({ error: "Invalid amount." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Could not read native balance." },
+        { status: 502 },
+      );
     }
-  }
 
-  if (amountWei <= BigInt(0)) {
-    return NextResponse.json(
-      { error: "Amount must be greater than zero." },
-      { status: 400 },
-    );
-  }
+    if (amountMax) {
+      let reserve: bigint;
+      try {
+        const fees = await publicClient.estimateFeesPerGas();
+        const maxFee = fees.maxFeePerGas ?? BigInt(2_000_000_000);
+        reserve = BigInt(21_000) * maxFee * BigInt(3);
+      } catch {
+        reserve = BigInt(21_000) * BigInt(100_000_000_000) * BigInt(2);
+      }
+      amountWei = balance > reserve ? balance - reserve : BigInt(0);
+      if (amountWei <= BigInt(0)) {
+        return NextResponse.json(
+          {
+            error:
+              "Cannot withdraw max native balance — leave enough for gas fees.",
+          },
+          { status: 400 },
+        );
+      }
+    } else {
+      try {
+        amountWei = parseUnits(amountStr, nativeDecimals);
+      } catch {
+        return NextResponse.json({ error: "Invalid amount." }, { status: 400 });
+      }
+    }
 
-  if (amountWei > balance) {
-    return NextResponse.json(
-      {
-        error: "Insufficient balance for this amount.",
-        balanceRaw: balance.toString(),
-      },
-      { status: 400 },
-    );
-  }
+    if (amountWei <= BigInt(0)) {
+      return NextResponse.json(
+        { error: "Amount must be greater than zero." },
+        { status: 400 },
+      );
+    }
 
-  const data = encodeFunctionData({
-    abi: erc20Abi,
-    functionName: "transfer",
-    args: [recipient, amountWei],
-  });
+    if (amountWei > balance) {
+      return NextResponse.json(
+        {
+          error: "Insufficient balance for this amount.",
+          balanceRaw: balance.toString(),
+        },
+        { status: 400 },
+      );
+    }
+
+    sendTo = recipient;
+    sendData = "0x";
+    sendValue = amountWei;
+  } else {
+    let decimals: number;
+    try {
+      decimals = await publicClient.readContract({
+        address: token,
+        abi: erc20Abi,
+        functionName: "decimals",
+      });
+    } catch {
+      return NextResponse.json(
+        {
+          error:
+            "Could not read token decimals (wrong chain or not an ERC-20 contract?).",
+        },
+        { status: 400 },
+      );
+    }
+
+    if (!Number.isInteger(decimals) || decimals < 0 || decimals > 36) {
+      return NextResponse.json(
+        { error: "Token decimals look invalid." },
+        { status: 400 },
+      );
+    }
+
+    try {
+      balance = await publicClient.readContract({
+        address: token,
+        abi: erc20Abi,
+        functionName: "balanceOf",
+        args: [walletAddress],
+      });
+    } catch {
+      return NextResponse.json(
+        { error: "Could not read token balance." },
+        { status: 502 },
+      );
+    }
+
+    if (amountMax) {
+      amountWei = balance;
+    } else {
+      try {
+        amountWei = parseUnits(amountStr, decimals);
+      } catch {
+        return NextResponse.json({ error: "Invalid amount." }, { status: 400 });
+      }
+    }
+
+    if (amountWei <= BigInt(0)) {
+      return NextResponse.json(
+        { error: "Amount must be greater than zero." },
+        { status: 400 },
+      );
+    }
+
+    if (amountWei > balance) {
+      return NextResponse.json(
+        {
+          error: "Insufficient balance for this amount.",
+          balanceRaw: balance.toString(),
+        },
+        { status: 400 },
+      );
+    }
+
+    sendTo = token;
+    sendData = encodeFunctionData({
+      abi: erc20Abi,
+      functionName: "transfer",
+      args: [recipient, amountWei],
+    });
+    sendValue = undefined;
+  }
 
   try {
     const evmClient = await authenticatedEvmClient({ authToken, environmentId });
     const txHash = await dynamicSignAndSendTransaction({
       evmClient,
       walletAddress,
-      to: token,
-      data,
+      to: sendTo,
+      data: sendData,
+      value: sendValue,
       chain,
     });
     return NextResponse.json({
