@@ -4,6 +4,7 @@ import { formatUnits, parseUnits } from "viem";
 import { getSessionFromRequest } from "@/lib/auth/session";
 import { insertDuel, listOpenDuelsForUser } from "@/lib/db/duels";
 import { findUserById } from "@/lib/db/users";
+import { MIN_DUEL_STAKE_USDC } from "@/lib/duel/min-stake-usdc";
 import {
   initialDuelChainsForInsert,
   normalizeDuelPlayMode,
@@ -89,6 +90,14 @@ export async function POST(request: NextRequest) {
 
   if (units <= BigInt(0)) {
     return NextResponse.json({ error: "Stake must be strictly positive." }, { status: 400 });
+  }
+
+  const minStakeUnits = parseUnits(String(MIN_DUEL_STAKE_USDC), USDC_DECIMALS);
+  if (units < minStakeUnits) {
+    return NextResponse.json(
+      { error: `Minimum stake is ${MIN_DUEL_STAKE_USDC} USDC per player.` },
+      { status: 400 },
+    );
   }
 
   const stakeUsdc = formatUnits(units, USDC_DECIMALS);

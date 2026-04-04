@@ -18,6 +18,7 @@ import {
   gameTitle,
 } from "@/components/game-ui";
 import { usePlayMode } from "@/components/play-mode-context";
+import { MIN_DUEL_STAKE_USDC } from "@/lib/duel/min-stake-usdc";
 
 export default function NewDuelPage() {
   const { playMode } = usePlayMode();
@@ -58,6 +59,12 @@ export default function NewDuelPage() {
       const min = Number.parseInt(durationMinutes, 10);
       if (!Number.isFinite(min) || min < 1) {
         setError("Invalid duration (minutes ≥ 1).");
+        return;
+      }
+      const stakeStr = stakeUsdc.trim().replace(",", ".");
+      const stakeNum = Number.parseFloat(stakeStr);
+      if (!Number.isFinite(stakeNum) || stakeNum < MIN_DUEL_STAKE_USDC) {
+        setError(`Minimum stake is ${MIN_DUEL_STAKE_USDC} USDC per player.`);
         return;
       }
       const res = await fetch("/api/duels", {
@@ -157,10 +164,13 @@ export default function NewDuelPage() {
               inputMode="decimal"
               value={stakeUsdc}
               onChange={(e) => setStakeUsdc(e.target.value)}
-              placeholder="e.g. 100 or 50.5"
+              placeholder={`min ${MIN_DUEL_STAKE_USDC} — e.g. 100 or 50.5`}
               className={gameInput}
               required
             />
+            <p className={gameMuted}>
+              At least {MIN_DUEL_STAKE_USDC} USDC (minimum position size for a trade).
+            </p>
           </label>
           <label className="block space-y-2">
             <span className={gameLabel}>Trade duration (minutes)</span>
