@@ -199,8 +199,10 @@ type CardProps = {
   expandChart?: boolean;
   /** Style sobre + bordure verte/rouge animée selon le mouvement du PnL. */
   liveDuelVisuals?: boolean;
-  /** Colonne duel : identité visuelle joueur (cyan = toi, fuchsia = adversaire). */
+  /** Colonne duel : identité joueur (ambre/or = toi, indigo = adversaire). */
   duelPlayerSide?: "my" | "opponent";
+  /** Nombre de positions dans ce panneau : 1 → Close en bas ; 2+ → Close en coin (duel live compact). */
+  positionStackCount?: number;
 };
 
 function PositionCard({
@@ -215,6 +217,7 @@ function PositionCard({
   expandChart = false,
   liveDuelVisuals = false,
   duelPlayerSide,
+  positionStackCount = 1,
 }: CardProps) {
   const rawId = useId();
   const gradientId = `pnl-grad-${rawId.replace(/:/g, "")}`;
@@ -235,20 +238,45 @@ function PositionCard({
 
   const [pnlTrend, setPnlTrend] = useState<"up" | "down" | "flat">("flat");
   const lastPnlRef = useRef<number | null>(null);
+  const lastPriceRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (!liveDuelVisuals) return;
-    const p = typeof pos.pnl === "number" && Number.isFinite(pos.pnl) ? pos.pnl : null;
-    if (p === null) return;
-    const prev = lastPnlRef.current;
-    if (prev !== null) {
-      const eps = 1e-8;
-      if (p > prev + eps) setPnlTrend("up");
-      else if (p < prev - eps) setPnlTrend("down");
+    if (!liveDuelVisuals) {
+      lastPnlRef.current = null;
+      lastPriceRef.current = null;
+      setPnlTrend("flat");
+      return;
+    }
+
+    const pnl = typeof pos.pnl === "number" && Number.isFinite(pos.pnl) ? pos.pnl : null;
+    const price =
+      typeof pos.currentPriceUsdDecimaled === "number" && Number.isFinite(pos.currentPriceUsdDecimaled)
+        ? pos.currentPriceUsdDecimaled
+        : null;
+
+    const prevPx = lastPriceRef.current;
+    const prevPnl = lastPnlRef.current;
+
+    /** Mouvement de prix minimal (relatif) pour déclencher vert/rouge à chaque tick utile. */
+    const priceMoved = (a: number, b: number) => {
+      const mag = Math.max(Math.abs(a), Math.abs(b), 1e-18);
+      return Math.abs(a - b) >= mag * 1e-12;
+    };
+
+    if (price !== null && prevPx !== null && priceMoved(price, prevPx)) {
+      const d = price - prevPx;
+      if (long) setPnlTrend(d > 0 ? "up" : "down");
+      else setPnlTrend(d < 0 ? "up" : "down");
+    } else if (pnl !== null && prevPnl !== null) {
+      const eps = Math.max(1e-10, Math.abs(prevPnl) * 1e-9);
+      if (pnl > prevPnl + eps) setPnlTrend("up");
+      else if (pnl < prevPnl - eps) setPnlTrend("down");
       else setPnlTrend("flat");
     }
-    lastPnlRef.current = p;
-  }, [pos.pnl, liveDuelVisuals]);
+
+    if (price !== null) lastPriceRef.current = price;
+    if (pnl !== null) lastPnlRef.current = pnl;
+  }, [pos.pnl, pos.currentPriceUsdDecimaled, long, liveDuelVisuals]);
 
   const trendClass =
     liveDuelVisuals &&
@@ -260,28 +288,32 @@ function PositionCard({
 
   const duelLiveBg =
     liveDuelVisuals && duelPlayerSide === "my"
-      ? "bg-[linear-gradient(165deg,rgba(34,211,238,0.1),rgba(9,9,11,0.99)_46%,rgba(15,23,42,0.94))]"
+      ? "bg-[linear-gradient(165deg,rgba(251,191,36,0.11),rgba(9,9,11,0.99)_46%,rgba(35,28,10,0.94))]"
       : liveDuelVisuals && duelPlayerSide === "opponent"
-        ? "bg-[linear-gradient(165deg,rgba(232,121,249,0.1),rgba(9,9,11,0.99)_46%,rgba(30,16,42,0.94))]"
+        ? "bg-[linear-gradient(165deg,rgba(129,140,248,0.11),rgba(9,9,11,0.99)_46%,rgba(18,18,40,0.94))]"
         : liveDuelVisuals
           ? "bg-[linear-gradient(165deg,rgba(24,24,27,0.97),rgba(9,9,11,0.99)_48%,rgba(24,24,27,0.95))]"
           : "";
 
   const liveCardLabelClass =
     liveDuelVisuals && duelPlayerSide === "my"
-      ? "text-[9px] font-bold uppercase tracking-[0.2em] text-cyan-400/90"
+      ? "text-[9px] font-bold uppercase tracking-[0.2em] text-amber-400/95"
       : liveDuelVisuals && duelPlayerSide === "opponent"
-        ? "text-[9px] font-bold uppercase tracking-[0.2em] text-fuchsia-400/90"
+        ? "text-[9px] font-bold uppercase tracking-[0.2em] text-indigo-400/95"
         : liveDuelVisuals
           ? "text-[9px] font-bold uppercase tracking-[0.2em] text-zinc-500"
           : "";
 
   const liveTitleClass =
     liveDuelVisuals && duelPlayerSide === "my"
-      ? "text-cyan-50 [text-shadow:0_0_18px_rgba(34,211,238,0.25)]"
+      ? "text-amber-50 [text-shadow:0_0_18px_rgba(251,191,36,0.35)]"
       : liveDuelVisuals && duelPlayerSide === "opponent"
-        ? "text-fuchsia-50 [text-shadow:0_0_18px_rgba(232,121,249,0.28)]"
+        ? "text-indigo-100 [text-shadow:0_0_18px_rgba(129,140,248,0.32)]"
         : "";
+
+  /** Duel live + compact : coin seulement si plusieurs cartes ; une seule → footer en bas comme avant. */
+  const compactLiveCloseUi =
+    liveDuelVisuals && compact && !readOnly && positionStackCount > 1;
 
   return (
     <article
@@ -291,11 +323,25 @@ function PositionCard({
           : "border-[var(--game-cyan-dim)] bg-[linear-gradient(165deg,rgba(65,245,240,0.08),rgba(4,2,12,0.92)_45%,rgba(255,61,154,0.05))]"
       }`}
     >
+      {compactLiveCloseUi ? (
+        <button
+          type="button"
+          aria-label="Close position at market"
+          title="Close at market"
+          disabled={!canClose || closing}
+          onClick={onCloseMarket}
+          className="absolute right-1 top-1 z-20 max-w-[4.5rem] truncate rounded-sm border border-rose-800/60 bg-rose-950/85 px-1 py-0.5 font-[family-name:var(--font-orbitron)] text-[7px] font-bold uppercase leading-tight tracking-wide text-rose-100 shadow-md transition enabled:hover:bg-rose-900/55 disabled:opacity-35 sm:right-1.5 sm:top-1.5 sm:max-w-none sm:px-1.5 sm:text-[8px]"
+        >
+          {closing ? "…" : "Close"}
+        </button>
+      ) : null}
       <div
         className={`pointer-events-none absolute inset-0 ${liveDuelVisuals ? "bg-[repeating-linear-gradient(-75deg,transparent,transparent_14px,rgba(255,255,255,0.02)_14px,rgba(255,255,255,0.02)_15px)]" : "bg-[repeating-linear-gradient(-75deg,transparent,transparent_14px,rgba(65,245,240,0.025)_14px,rgba(65,245,240,0.025)_15px)]"}`}
       />
       <div className={`relative flex min-h-0 flex-1 flex-col ${compact ? "gap-2" : "gap-3"}`}>
-        <div className="flex shrink-0 flex-wrap items-start justify-between gap-2">
+        <div
+          className={`flex shrink-0 flex-wrap items-start justify-between gap-2 ${compactLiveCloseUi ? "pr-[3.25rem] sm:pr-14" : ""}`}
+        >
           <div>
             <p
               className={`!tracking-[0.18em] ${compact ? "!text-[8px]" : ""} ${liveDuelVisuals ? liveCardLabelClass : gameLabel}`}
@@ -319,12 +365,12 @@ function PositionCard({
               className={`rounded-sm border px-2.5 py-1 font-[family-name:var(--font-orbitron)] text-[10px] font-bold uppercase tracking-wider ${
                 liveDuelVisuals && duelPlayerSide === "my"
                   ? long
-                    ? "border-cyan-400/55 bg-cyan-950/45 text-cyan-100"
-                    : "border-cyan-700/45 bg-cyan-950/25 text-cyan-200/80"
+                    ? "border-amber-400/60 bg-amber-950/40 text-amber-100"
+                    : "border-amber-800/50 bg-amber-950/20 text-amber-200/85"
                   : liveDuelVisuals && duelPlayerSide === "opponent"
                     ? long
-                      ? "border-fuchsia-400/55 bg-fuchsia-950/40 text-fuchsia-100"
-                      : "border-fuchsia-800/45 bg-fuchsia-950/25 text-fuchsia-200/80"
+                      ? "border-indigo-400/55 bg-indigo-950/45 text-indigo-100"
+                      : "border-indigo-800/50 bg-indigo-950/25 text-indigo-200/85"
                     : liveDuelVisuals
                       ? long
                         ? "border-zinc-500/40 bg-zinc-800/40 text-zinc-200"
@@ -338,9 +384,11 @@ function PositionCard({
             </span>
             <span
               className={`rounded-sm border px-2.5 py-1 font-[family-name:var(--font-orbitron)] text-[10px] font-bold uppercase tracking-wider ${
-                liveDuelVisuals
-                  ? "border-amber-500/45 bg-amber-950/35 text-amber-200/95 [text-shadow:0_0_10px_rgba(251,191,36,0.35)]"
-                  : "border-[var(--game-amber)]/50 bg-[rgba(255,200,74,0.1)] text-[var(--game-amber)]"
+                liveDuelVisuals && duelPlayerSide === "opponent"
+                  ? "border-indigo-500/45 bg-indigo-950/35 text-indigo-200/95 [text-shadow:0_0_10px_rgba(129,140,248,0.35)]"
+                  : liveDuelVisuals
+                    ? "border-amber-500/45 bg-amber-950/35 text-amber-200/95 [text-shadow:0_0_10px_rgba(251,191,36,0.35)]"
+                    : "border-[var(--game-amber)]/50 bg-[rgba(255,200,74,0.1)] text-[var(--game-amber)]"
               }`}
             >
               {pos.leverage}×
@@ -468,9 +516,13 @@ function PositionCard({
           )}
         </div>
 
-        {/* Même hauteur que la carte « ton » trade : zone footer fixe (readOnly = emplacement réservé). */}
+        {/* readOnly : réserve hauteur vs colonne « toi ». Duel live compact : Close déjà en coin. */}
         <div
-          className={`mt-auto flex flex-col justify-end border-t ${liveDuelVisuals ? "border-zinc-700/40" : "border-[var(--game-cyan-dim)]/30"} ${compact ? "min-h-[4.75rem] pt-2" : "min-h-[7.5rem] pt-3"}`}
+          className={`mt-auto flex flex-col justify-end ${
+            compactLiveCloseUi
+              ? "min-h-0 pt-0"
+              : `border-t ${liveDuelVisuals ? "border-zinc-700/40" : "border-[var(--game-cyan-dim)]/30"} ${compact ? "min-h-[4.75rem] pt-2" : "min-h-[7.5rem] pt-3"}`
+          }`}
         >
           {readOnly ? (
             <div className="pointer-events-none select-none opacity-0" aria-hidden>
@@ -486,7 +538,7 @@ function PositionCard({
                 Close market
               </button>
             </div>
-          ) : (
+          ) : compactLiveCloseUi ? null : (
             <>
               <p className={`${gameMuted} mb-2 ${compact ? "text-[9px] leading-tight" : "text-[11px]"}`}>
                 <code className="text-[var(--game-cyan)]">closeTradeMarket</code>(tradeIndex, expectedPrice) — index{" "}
@@ -507,7 +559,7 @@ function PositionCard({
                 type="button"
                 disabled={!canClose || closing}
                 onClick={onCloseMarket}
-                className={`rounded-sm border font-[family-name:var(--font-orbitron)] font-bold uppercase tracking-wider transition disabled:opacity-40 ${liveDuelVisuals ? "border-rose-900/45 bg-rose-950/25 text-rose-200/90 enabled:hover:bg-rose-950/40" : gameBtnDanger} ${compact ? "py-1.5 text-[10px]" : "py-2 text-xs"}`}
+                className={`w-full rounded-sm border font-[family-name:var(--font-orbitron)] font-bold uppercase tracking-wider transition disabled:opacity-40 ${liveDuelVisuals ? "border-rose-900/45 bg-rose-950/25 text-rose-200/90 enabled:hover:bg-rose-950/40" : gameBtnDanger} ${compact ? "py-1.5 text-[10px]" : "py-2 text-xs"}`}
               >
                 {closing ? "Closing…" : "Close market"}
               </button>
@@ -637,16 +689,16 @@ export function GainsLivePositionsPanel({
 
   const duelColumnAccent =
     liveDuelVisuals && duelPlayerSide === "my"
-      ? "border-l-[3px] border-l-cyan-400/60 shadow-[inset_4px_0_20px_-4px_rgba(34,211,238,0.12)]"
+      ? "border-l-[3px] border-l-amber-400/70 shadow-[inset_4px_0_20px_-4px_rgba(251,191,36,0.14)]"
       : liveDuelVisuals && duelPlayerSide === "opponent"
-        ? "border-l-[3px] border-l-fuchsia-400/60 shadow-[inset_4px_0_20px_-4px_rgba(232,121,249,0.12)]"
+        ? "border-l-[3px] border-l-indigo-400/70 shadow-[inset_4px_0_20px_-4px_rgba(129,140,248,0.14)]"
         : "";
 
   const panelTitleClass =
     liveDuelVisuals && duelPlayerSide === "my"
-      ? "text-[9px] font-bold uppercase tracking-[0.2em] text-cyan-400/95"
+      ? "text-[9px] font-bold uppercase tracking-[0.2em] text-amber-400/95"
       : liveDuelVisuals && duelPlayerSide === "opponent"
-        ? "text-[9px] font-bold uppercase tracking-[0.2em] text-fuchsia-400/95"
+        ? "text-[9px] font-bold uppercase tracking-[0.2em] text-indigo-400/95"
         : liveDuelVisuals
           ? "text-[9px] font-bold uppercase tracking-[0.2em] text-zinc-500"
           : "";
@@ -722,6 +774,7 @@ export function GainsLivePositionsPanel({
                 expandChart={expandChart}
                 liveDuelVisuals={liveDuelVisuals}
                 duelPlayerSide={duelPlayerSide}
+                positionStackCount={positions.length}
               />
             </li>
           ))}
