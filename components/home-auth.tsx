@@ -16,6 +16,7 @@ import { LoginForm } from "@/components/login-form"
 import { SignupForm } from "@/components/signup-form"
 import { HubPlayModeMenu } from "@/components/hub-play-mode-menu"
 import { OpenDuelsMenu } from "@/components/open-duels-menu"
+import { OpenPerpPositionsPanel } from "@/components/open-perp-positions-panel"
 import { WalletProfile } from "@/components/wallet-profile"
 
 type MeUser = {
@@ -52,6 +53,16 @@ export function HomeAuth() {
     setUser(null)
   }
 
+  async function fetchGainsPairs() {
+    try {
+      const r = await fetch(`/api/gains/pairs?chain=Testnet`)
+      const data = (await r.json()) as any[] & { error?: string }
+      console.log(data)
+    } catch (error) {
+      console.error(error)
+    }
+  }
+
   if (loading) {
     return (
       <p
@@ -73,6 +84,7 @@ export function HomeAuth() {
         {/* ── Compact profile bar ── */}
         <div
           className={`${gamePanel} ${gamePanelTopAccent} relative overflow-visible`}
+          onClick={() => fetchGainsPairs()}
         >
           <div className="flex items-center gap-3 px-4 py-3 sm:px-5">
             <div
@@ -145,6 +157,8 @@ export function HomeAuth() {
             <WalletProfile walletAddress={user.walletAddress} />
           ) : null}
         </div>
+
+        {user.walletAddress ? <OpenPerpPositionsPanel /> : null}
       </div>
     )
   }

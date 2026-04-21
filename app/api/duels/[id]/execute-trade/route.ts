@@ -13,9 +13,15 @@ import {
   isGainsExecSurfaceConfigured,
 } from "@/lib/gns/gains-exec-context"
 import { approveCollateralIfNeeded } from "@/lib/gns/approve-collateral-if-needed"
-import { buildGnsTradeFromDuelConfig } from "@/lib/gns/build-duel-trade"
-import { serializeTradeForJson } from "@/lib/gns/serialize-trade-for-json"
-import { sendGnsOpenTrade } from "@/lib/gns/send-open-trade"
+import { resolveGainsPair } from "@/lib/gains/resolve-pair"
+import { makePerpSignerFromDynamic } from "@/lib/mobula/dynamic-perp-signer"
+import { PerpInteractionController } from "@/lib/mobula/perp-v2-client"
+import { getMobulaApiKey, getMobulaBaseUrl } from "@/lib/mobula/perp-v2-env"
+import {
+  pickOrderTxHash,
+  pickRejectionReason,
+} from "@/lib/mobula/perp-v2-response"
+import type { CreateOrderV2Params } from "@/lib/mobula/perp-v2-types"
 
 export const runtime = "nodejs"
 
@@ -23,6 +29,9 @@ const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 const USDC_DECIMALS = 6
+
+/** Mobula slippage is in percent (e.g. 1 = 1%) — not Gains 1e3 units. */
+const DEFAULT_MAX_SLIPPAGE_P = 3
 
 export async function POST(
   request: NextRequest,
@@ -107,8 +116,13 @@ export async function POST(
   }
 
   let collateralWei: bigint
+  let collateralUsdc: number
   try {
     collateralWei = parseUnits(duel.stake_usdc, USDC_DECIMALS)
+    collateralUsdc = Number(duel.stake_usdc)
+    if (!Number.isFinite(collateralUsdc) || collateralUsdc <= 0) {
+      throw new Error("non-positive USDC stake")
+    }
   } catch {
     return NextResponse.json(
       { error: "Invalid duel USDC stake." },
@@ -170,20 +184,51 @@ export async function POST(
     )
   }
 
-  let trade: ReturnType<typeof buildGnsTradeFromDuelConfig>
-  try {
-    trade = buildGnsTradeFromDuelConfig(
-      walletAddress,
-      collateralWei,
-      sideConfig,
-      { collateralIndex: execRt.collateralIndex },
+  const pair = await resolveGainsPair(
+    sideConfig.pairIndex,
+    sideConfig.gainsChain ?? "Arbitrum",
+  )
+  if (!pair || !pair.from) {
+    return NextResponse.json(
+      { error: `Could not resolve pair ${sideConfig.pairIndex}.` },
+      { status: 502 },
     )
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "Invalid trade."
-    return NextResponse.json({ error: msg }, { status: 400 })
   }
 
-  const minAllowance = trade.collateralAmount + BigInt(1)
+  const maxSlippageP =
+    Number(process.env.MOBULA_MAX_SLIPPAGE_P) || DEFAULT_MAX_SLIPPAGE_P
+
+  const orderParams: CreateOrderV2Params = {
+    baseToken: pair.from,
+    quote: "USD",
+    leverage: sideConfig.leverageX,
+    long: Boolean(sideConfig.long),
+    reduceOnly: false,
+    collateralAmount: collateralUsdc,
+    orderType: "market",
+    maxSlippageP,
+    marginMode: 1,
+    chainIds: [`evm:${execRt.chain.id}`],
+    ...(process.env.GNS_REFERRER_ADDRESS?.startsWith("0x")
+      ? { referrer: process.env.GNS_REFERRER_ADDRESS }
+      : {}),
+  }
+
+  console.log("[duel-exec] createOrder params", {
+    duelId,
+    wallet: walletAddress,
+    ...orderParams,
+  })
+
+  const minAllowance = collateralWei + BigInt(1)
+
+  let mobulaApiKey: string
+  try {
+    mobulaApiKey = getMobulaApiKey()
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "MOBULA_API_KEY missing."
+    return NextResponse.json({ error: msg }, { status: 500 })
+  }
 
   try {
     const evmClient = await authenticatedEvmClient({
@@ -200,13 +245,45 @@ export async function POST(
       spender: execRt.diamond,
     })
 
-    const txHash = await sendGnsOpenTrade({
-      evmClient,
-      walletAddress,
-      trade,
-      chain: execRt.chain,
-      diamond: execRt.diamond,
+    const controller = new PerpInteractionController({
+      baseUrl: getMobulaBaseUrl(),
+      apiKey: mobulaApiKey,
+      signer: makePerpSignerFromDynamic(evmClient, walletAddress),
+      resolveChain: (chainId) =>
+        chainId === execRt.chain.id ? execRt.chain : undefined,
     })
+
+    const result = await controller.createOrder(orderParams)
+
+    if (!result.data.success) {
+      const reason = pickRejectionReason(result)
+      console.error("[duel-exec] createOrder rejected", {
+        duelId,
+        reason,
+        executionDetails: result.data.executionDetails,
+      })
+      return NextResponse.json(
+        {
+          error: reason
+            ? `Mobula rejected the order: ${reason}`
+            : "Mobula rejected the order.",
+          executionDetails: result.data.executionDetails,
+          ...(approveTxHash ? { approveTxHash } : {}),
+        },
+        { status: 502 },
+      )
+    }
+
+    const txHash = pickOrderTxHash(result)
+    if (!txHash) {
+      return NextResponse.json(
+        {
+          error: "Mobula returned success but no tx hash in executionDetails.",
+          executionDetails: result.data.executionDetails,
+        },
+        { status: 502 },
+      )
+    }
 
     try {
       await markParticipantOpenTradeRecorded(duelId, isCreator, txHash)
@@ -225,14 +302,12 @@ export async function POST(
     return NextResponse.json({
       txHash,
       ...(approveTxHash ? { approveTxHash } : {}),
-      trade: serializeTradeForJson(trade),
+      executionDetails: result.data.executionDetails,
     })
   } catch (e) {
-    console.error("[duel execute] openTrade failed:", e)
+    console.error("[duel execute] openTrade via Mobula failed:", e)
     return NextResponse.json(
-      {
-        error: e instanceof Error ? e.message : "openTrade failed.",
-      },
+      { error: e instanceof Error ? e.message : "openTrade failed." },
       { status: 502 },
     )
   }

@@ -30,7 +30,10 @@ import {
   gameTitle,
 } from "@/components/game-ui"
 import {
+  chainIdFromGainsApiChain,
+  extractPositionIdFromMobulaId,
   gainsPositionHistorySideKey,
+  prettyPairFromMarketId,
   type GainsApiChain,
   type GainsTradingPair,
 } from "@/types/gains-api"
@@ -228,6 +231,111 @@ export function DuelPrepareView() {
     null,
   )
 
+  /**
+   * Le WS renvoie TOUTES les positions ouvertes du wallet (pas juste celles de la duel).
+   * On filtre par chain pour ne garder que celles de la duel — sinon des positions
+   * pré-existantes sur une autre chaîne (ex: Arbitrum Sepolia) apparaissent à l'écran
+   * et sont fermées automatiquement à la fin du timer.
+   */
+  const myDuelChainId = duel?.myExecGainsChain
+    ? chainIdFromGainsApiChain(duel.myExecGainsChain)
+    : null
+  const opponentGainsChain: GainsApiChain | null =
+    duel?.viewer?.isCreator
+      ? duel?.opponentChain ?? null
+      : duel?.creatorChain ?? null
+  const opponentDuelChainId = opponentGainsChain
+    ? chainIdFromGainsApiChain(opponentGainsChain)
+    : null
+
+  const filteredMyPositions = useMemo(
+    () =>
+      myDuelChainId
+        ? myPositions.filter((p) => p.chainId === myDuelChainId)
+        : myPositions,
+    [myPositions, myDuelChainId],
+  )
+  const filteredOpponentPositions = useMemo(
+    () =>
+      opponentDuelChainId
+        ? opponentPositions.filter((p) => p.chainId === opponentDuelChainId)
+        : opponentPositions,
+    [opponentPositions, opponentDuelChainId],
+  )
+
+  /** Trace résolution du chain scope — utile pour comprendre pourquoi une chaîne n'est pas filtrée. */
+  const lastChainScopeRef = useRef<string>("")
+  useEffect(() => {
+    const sig = `${duelId}|${duel?.myExecGainsChain ?? ""}|${myDuelChainId ?? ""}|${opponentGainsChain ?? ""}|${opponentDuelChainId ?? ""}`
+    if (sig === lastChainScopeRef.current) return
+    lastChainScopeRef.current = sig
+    console.log("[duel-view] chain scope resolved", {
+      duelId,
+      myExecGainsChain: duel?.myExecGainsChain ?? null,
+      myDuelChainId,
+      opponentGainsChain,
+      opponentDuelChainId,
+      viewerIsCreator: duel?.viewer?.isCreator ?? null,
+      ...(myDuelChainId == null
+        ? {
+            warning:
+              "myDuelChainId is null — WS positions will NOT be filtered (pre-existing positions on other chains may leak into the UI and auto-close).",
+          }
+        : {}),
+    })
+  }, [
+    duelId,
+    duel?.myExecGainsChain,
+    duel?.viewer?.isCreator,
+    myDuelChainId,
+    opponentGainsChain,
+    opponentDuelChainId,
+  ])
+
+  /** Trace filtre display MES positions — log uniquement si le résumé (total/kept/chainId) change. */
+  const lastMyFilterSigRef = useRef<string>("")
+  useEffect(() => {
+    const sig = `${myPositions.length}:${filteredMyPositions.length}:${myDuelChainId ?? "none"}`
+    if (sig === lastMyFilterSigRef.current) return
+    lastMyFilterSigRef.current = sig
+    const dropped = myDuelChainId
+      ? myPositions.filter((p) => p.chainId !== myDuelChainId)
+      : []
+    console.log("[duel-view] my positions filter", {
+      duelChainId: myDuelChainId,
+      total: myPositions.length,
+      kept: filteredMyPositions.length,
+      dropped: dropped.length,
+      droppedSample: dropped.slice(0, 5).map((p) => ({
+        id: p.id,
+        chainId: p.chainId,
+        marketId: p.marketId,
+      })),
+    })
+  }, [myPositions, filteredMyPositions, myDuelChainId])
+
+  /** Trace filtre display positions ADVERSAIRE — même idée que ci-dessus. */
+  const lastOppFilterSigRef = useRef<string>("")
+  useEffect(() => {
+    const sig = `${opponentPositions.length}:${filteredOpponentPositions.length}:${opponentDuelChainId ?? "none"}`
+    if (sig === lastOppFilterSigRef.current) return
+    lastOppFilterSigRef.current = sig
+    const dropped = opponentDuelChainId
+      ? opponentPositions.filter((p) => p.chainId !== opponentDuelChainId)
+      : []
+    console.log("[duel-view] opponent positions filter", {
+      duelChainId: opponentDuelChainId,
+      total: opponentPositions.length,
+      kept: filteredOpponentPositions.length,
+      dropped: dropped.length,
+      droppedSample: dropped.slice(0, 5).map((p) => ({
+        id: p.id,
+        chainId: p.chainId,
+        marketId: p.marketId,
+      })),
+    })
+  }, [opponentPositions, filteredOpponentPositions, opponentDuelChainId])
+
   const duelEndedForUi = duelTimerEnded || Boolean(duel?.duelClosedAt)
 
   const duelCountdownDisplay = useDuelWsCountdown(
@@ -258,37 +366,111 @@ export function DuelPrepareView() {
 
   useLayoutEffect(() => {
     if (!duelTimerEnded) return
-    const batch = takeDuelEndCloseTargets()
-    if (!batch?.length) return
+    const rawBatch = takeDuelEndCloseTargets()
+    if (!rawBatch?.length) return
+
+    /**
+     * Ne fermer que les positions ouvertes pour cette duel (filtrage par chain).
+     * Sans filtre, des positions pré-existantes sur une autre chaîne (ex: Arbitrum Sepolia
+     * laissée ouverte avant la duel) seraient fermées par erreur.
+     */
+    const batch = myDuelChainId
+      ? rawBatch.filter((p) => p.chainId === myDuelChainId)
+      : rawBatch
+    const skipped = rawBatch.length - batch.length
+    if (skipped > 0) {
+      console.warn("[duel-auto-close] filtered out non-duel-chain positions", {
+        duelChainId: myDuelChainId,
+        skipped,
+        skippedIds: rawBatch
+          .filter((p) => p.chainId !== myDuelChainId)
+          .map((p) => p.id),
+      })
+    }
+    if (!batch.length) {
+      console.log("[duel-auto-close] nothing to close after chain filter", {
+        duelChainId: myDuelChainId,
+        rawCount: rawBatch.length,
+      })
+      return
+    }
 
     setDuelAutoCloseBusy(true)
     setDuelAutoCloseResult(null)
 
+    console.log("[duel-auto-close] starting", {
+      duelId,
+      count: batch.length,
+      ids: batch.map((p) => p.id),
+      duelChainId: myDuelChainId,
+    })
     void (async () => {
       const errs: string[] = []
       for (const pos of batch) {
-        const mark = pos.currentPriceUsdDecimaled
-        if (typeof mark !== "number" || !Number.isFinite(mark)) continue
+        if (!pos.marketId || !pos.chainId || !pos.exchange) {
+          console.warn("[duel-auto-close] skip — missing required fields", {
+            id: pos.id,
+            marketId: pos.marketId,
+            chainId: pos.chainId,
+            exchange: pos.exchange,
+          })
+          continue
+        }
+        const label = prettyPairFromMarketId(pos.marketId)
+        const positionId = extractPositionIdFromMobulaId(pos.id, pos.address)
+        const body = {
+          dex: pos.exchange,
+          chainId: pos.chainId,
+          marketId: pos.marketId,
+          positionId,
+          trigger: "duel-auto-close" as const,
+        }
+        console.log("[duel-auto-close] POST /api/perp-positions/close", { id: pos.id, ...body })
+        const t0 = performance.now()
         try {
-          const r = await fetch("/api/trade/close-market", {
+          const r = await fetch("/api/perp-positions/close", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             credentials: "include",
-            body: JSON.stringify({
-              tradeIndex: pos.index ?? 0,
-              currentPriceUsdDecimaled: mark,
-              gainsChain:
-                duel?.myExecGainsChain ??
-                duel?.myTradeConfig?.gainsChain ??
-                gainsChain,
-            }),
+            body: JSON.stringify(body),
           })
-          const data = (await r.json()) as { error?: string }
-          if (!r.ok) {
-            errs.push(`#${pos.index ?? "?"}: ${data.error ?? "failed"}`)
+          const data = (await r.json()) as {
+            error?: string
+            txHash?: string
+            rateLimited?: boolean
           }
-        } catch {
-          errs.push(`#${pos.index ?? "?"}: network`)
+          const durationMs = Math.round(performance.now() - t0)
+          if (!r.ok) {
+            if (data.rateLimited) {
+              console.error("[duel-auto-close] DYNAMIC_RATE_LIMITED", {
+                id: pos.id,
+                status: r.status,
+                error: data.error,
+                durationMs,
+              })
+            } else {
+              console.error("[duel-auto-close] failed", {
+                id: pos.id,
+                status: r.status,
+                error: data.error,
+                durationMs,
+              })
+            }
+            errs.push(`${label}: ${data.error ?? "failed"}`)
+          } else {
+            console.log("[duel-auto-close] ok", {
+              id: pos.id,
+              txHash: data.txHash,
+              durationMs,
+            })
+          }
+        } catch (e) {
+          console.error("[duel-auto-close] network error", {
+            id: pos.id,
+            error: e,
+            durationMs: Math.round(performance.now() - t0),
+          })
+          errs.push(`${label}: network`)
         }
       }
       setDuelAutoCloseBusy(false)
@@ -302,12 +484,7 @@ export function DuelPrepareView() {
         )
       }
     })()
-  }, [
-    duelTimerEnded,
-    takeDuelEndCloseTargets,
-    duel?.myTradeConfig?.gainsChain,
-    gainsChain,
-  ])
+  }, [duelTimerEnded, takeDuelEndCloseTargets, duelId, myDuelChainId])
 
   const [readyLoading, setReadyLoading] = useState(false)
   const [readyError, setReadyError] = useState<string | null>(null)
@@ -510,8 +687,18 @@ export function DuelPrepareView() {
 
   useEffect(() => {
     if (!duel?.bothReady || !participant || !duelId) return
-    subscribePositions(duelId)
-  }, [duel?.bothReady, participant, duelId, subscribePositions])
+    subscribePositions(duelId, {
+      my: myDuelChainId,
+      opponent: opponentDuelChainId,
+    })
+  }, [
+    duel?.bothReady,
+    participant,
+    duelId,
+    subscribePositions,
+    myDuelChainId,
+    opponentDuelChainId,
+  ])
 
   const hasLocalStart = duelStartSignalAt != null
   const prepElapsed =
@@ -643,7 +830,10 @@ export function DuelPrepareView() {
 
   const onExecute = useCallback(async () => {
     if (!duelId) return
-    subscribePositions(duelId)
+    subscribePositions(duelId, {
+      my: myDuelChainId,
+      opponent: opponentDuelChainId,
+    })
     setExecError(null)
     setExecLoading(true)
     try {
@@ -676,7 +866,7 @@ export function DuelPrepareView() {
     } finally {
       setExecLoading(false)
     }
-  }, [duelId, subscribePositions, loadDuel])
+  }, [duelId, subscribePositions, loadDuel, myDuelChainId, opponentDuelChainId])
 
   onExecuteRef.current = onExecute
 
@@ -1091,7 +1281,7 @@ export function DuelPrepareView() {
                           panelTitle="Positions (live)"
                           positionCardLabel="Your position"
                           showConnectionMeta={false}
-                          positions={myPositions}
+                          positions={filteredMyPositions}
                           pnlHistoryByKey={pnlHistoryMy}
                           historyKeyForPosition={(p) =>
                             gainsPositionHistorySideKey("my", p)
@@ -1115,7 +1305,7 @@ export function DuelPrepareView() {
                           positionCardLabel="Opponent position"
                           readOnly
                           showConnectionMeta={false}
-                          positions={opponentPositions}
+                          positions={filteredOpponentPositions}
                           pnlHistoryByKey={pnlHistoryOpponent}
                           historyKeyForPosition={(p) =>
                             gainsPositionHistorySideKey("opponent", p)

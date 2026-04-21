@@ -9,8 +9,13 @@ import {
   getGainsExecRuntime,
   isGainsExecSurfaceConfigured,
 } from "@/lib/gns/gains-exec-context";
-import { usdDecimalToGainsPriceUint64 } from "@/lib/gns/gains-price-precision";
-import { sendGnsCloseTradeMarket } from "@/lib/gns/send-close-trade-market";
+import { makePerpSignerFromDynamic } from "@/lib/mobula/dynamic-perp-signer";
+import { PerpInteractionController } from "@/lib/mobula/perp-v2-client";
+import { getMobulaApiKey, getMobulaBaseUrl } from "@/lib/mobula/perp-v2-env";
+import {
+  pickOrderTxHash,
+  pickRejectionReason,
+} from "@/lib/mobula/perp-v2-response";
 import type { GainsApiChain } from "@/types/gains-api";
 
 export const runtime = "nodejs";
@@ -41,7 +46,7 @@ export async function POST(request: NextRequest) {
   }
 
   const tradeIndexRaw = b.tradeIndex;
-  const priceRaw = b.currentPriceUsdDecimaled;
+  const pairIndexRaw = b.pairIndex;
 
   const tradeIndex =
     typeof tradeIndexRaw === "number"
@@ -57,22 +62,18 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  if (typeof priceRaw !== "number" || !Number.isFinite(priceRaw)) {
+  const pairIndex =
+    typeof pairIndexRaw === "number"
+      ? pairIndexRaw
+      : typeof pairIndexRaw === "string"
+        ? Number.parseInt(pairIndexRaw, 10)
+        : NaN;
+
+  if (!Number.isInteger(pairIndex) || pairIndex < 0 || pairIndex > 65535) {
     return NextResponse.json(
-      {
-        error:
-          "currentPriceUsdDecimaled must be a finite number (WebSocket `currentPriceUsdDecimaled`).",
-      },
+      { error: "pairIndex is required (uint16)." },
       { status: 400 },
     );
-  }
-
-  let expectedPriceUint64: bigint;
-  try {
-    expectedPriceUint64 = usdDecimalToGainsPriceUint64(priceRaw);
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "Invalid price.";
-    return NextResponse.json({ error: msg }, { status: 400 });
   }
 
   const user = await findUserById(session.userId);
@@ -123,32 +124,72 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: m }, { status: 500 });
   }
 
+  let mobulaApiKey: string;
+  try {
+    mobulaApiKey = getMobulaApiKey();
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "MOBULA_API_KEY missing.";
+    return NextResponse.json({ error: msg }, { status: 500 });
+  }
+
   try {
     const evmClient = await authenticatedEvmClient({
       authToken,
       environmentId,
     });
 
-    const txHash = await sendGnsCloseTradeMarket({
-      evmClient,
-      walletAddress,
-      tradeIndex,
-      expectedPriceUint64,
-      chain: execRt.chain,
-      diamond: execRt.diamond,
+    const controller = new PerpInteractionController({
+      baseUrl: getMobulaBaseUrl(),
+      apiKey: mobulaApiKey,
+      signer: makePerpSignerFromDynamic(evmClient, walletAddress),
+      resolveChain: (chainId) =>
+        chainId === execRt.chain.id ? execRt.chain : undefined,
     });
+
+    const result = await controller.closePosition({
+      dex: "gains",
+      chainId: String(execRt.chain.id),
+      marketId: String(pairIndex),
+      positionId: String(tradeIndex),
+      closePercentage: 100,
+    });
+
+    if (!result.data.success) {
+      const reason = pickRejectionReason(result);
+      return NextResponse.json(
+        {
+          error: reason
+            ? `Mobula rejected the close: ${reason}`
+            : "Mobula rejected the close.",
+          executionDetails: result.data.executionDetails,
+        },
+        { status: 502 },
+      );
+    }
+
+    const txHash = pickOrderTxHash(result);
+    if (!txHash) {
+      return NextResponse.json(
+        {
+          error: "Mobula returned success but no tx hash.",
+          executionDetails: result.data.executionDetails,
+        },
+        { status: 502 },
+      );
+    }
 
     return NextResponse.json({
       txHash,
       tradeIndex,
-      expectedPriceUint64: expectedPriceUint64.toString(),
+      pairIndex,
+      executionDetails: result.data.executionDetails,
     });
   } catch (e) {
-    console.error("[gns] closeTradeMarket failed:", e);
+    console.error("[gns] close-position via Mobula failed:", e);
     return NextResponse.json(
       {
         error:
-          e instanceof Error ? e.message : "closeTradeMarket failed (check server logs).",
+          e instanceof Error ? e.message : "close-position failed (check server logs).",
       },
       { status: 502 },
     );

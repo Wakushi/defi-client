@@ -19,6 +19,7 @@ import {
   type GainsPositionPnlTick,
   type GainsPositionUpdate,
   isGainsDuelPositionsSnapshot,
+  positionPnlUsd,
 } from "@/types/gains-api"
 
 export type { GainsDuelPnlOutcome }
@@ -42,7 +43,7 @@ function mergePnlHistory(
   for (const pos of incoming) {
     const key = keyFn(pos)
     const old = next.get(key) ?? []
-    const merged = [...old, { t: now, pnl: pos.pnl }]
+    const merged = [...old, { t: now, pnl: positionPnlUsd(pos) }]
     const trimmed =
       merged.length > PNL_HISTORY_MAX
         ? merged.slice(merged.length - PNL_HISTORY_MAX)
@@ -80,7 +81,16 @@ type GainsRealtimeContextValue = {
    * issues du dernier message à **1 s** restantes (souvent le dernier avec prix/index utiles), sinon du tick 0.
    */
   takeDuelEndCloseTargets: () => GainsPositionUpdate[] | null
-  subscribePositions: (duelId: string) => void
+  /**
+   * `chainScope` filtre les positions reçues du WS **avant** tout calcul (scores PnL, batch close,
+   * state React). Nécessaire car le WS renvoie TOUTES les positions du wallet, y compris celles
+   * ouvertes sur une autre chaîne avant la duel — sans filtrage, un outcome PnL peut refléter
+   * un trade testnet pré-existant au lieu du trade mainnet de la duel.
+   */
+  subscribePositions: (
+    duelId: string,
+    chainScope?: { my?: string | null; opponent?: string | null },
+  ) => void
   unsubscribePositions: () => void
 }
 
@@ -107,6 +117,50 @@ const GainsRealtimeContext =
   createContext<GainsRealtimeContextValue>(defaultValue)
 
 const LOG = "[GainsWS]"
+
+/**
+ * Alerte shape-drift : on mémorise les empreintes de champs vues et on log bruyamment
+ * la première fois qu'une empreinte change. Couvre le cas de cette session où le WS est
+ * passé au shape Mobula V2 et toutes les lectures ont retourné undefined.
+ */
+const POSITION_SHAPE_FINGERPRINTS = new Set<string>()
+/** Champs requis par l'UI / les helpers ; toute absence signale une nouvelle régression potentielle. */
+const REQUIRED_POSITION_FIELDS = [
+  "id",
+  "marketId",
+  "exchange",
+  "chainId",
+  "side",
+  "entryPriceQuote",
+  "unrealizedPnlUSD",
+] as const
+
+function logPositionShapeIfNew(
+  pos: GainsPositionUpdate,
+  context: "my" | "opponent",
+) {
+  const keys = Object.keys(pos).sort()
+  const fingerprint = keys.join(",")
+  if (POSITION_SHAPE_FINGERPRINTS.has(fingerprint)) return
+  POSITION_SHAPE_FINGERPRINTS.add(fingerprint)
+  const missing = REQUIRED_POSITION_FIELDS.filter(
+    (k) => !(k in (pos as Record<string, unknown>)),
+  )
+  console.log(LOG, "position shape seen", {
+    context,
+    id: pos.id,
+    fieldCount: keys.length,
+    fields: keys,
+    ...(missing.length ? { MISSING_REQUIRED: missing } : {}),
+  })
+  if (missing.length > 0) {
+    console.warn(
+      LOG,
+      "WS position payload missing required fields — UI will show NaN/undefined.",
+      { context, missing, id: pos.id },
+    )
+  }
+}
 
 function wsUrlFromEnv(): string | null {
   const u = process.env.NEXT_PUBLIC_DUEL_DEFI_WS_URL?.trim()
@@ -178,6 +232,11 @@ export function GainsRealtimeProvider({
     my: { pct: number; pnlUsdc: number } | null
     opponent: { pct: number; pnlUsdc: number } | null
   } | null>(null)
+  /** Filtres de chain (ex: `"evm:42161"`) appliqués à chaque snapshot WS — voir `subscribePositions.chainScope`. */
+  const myChainScopeRef = useRef<string | null>(null)
+  const opponentChainScopeRef = useRef<string | null>(null)
+  /** Trace le résumé filtrage précédent par snapshot — évite le spam d'un log par tick. */
+  const lastScopeFilterLogRef = useRef<string>("")
 
   const takeDuelEndCloseTargets = useCallback(():
     | GainsPositionUpdate[]
@@ -207,17 +266,68 @@ export function GainsRealtimeProvider({
   const applyDuelSnapshot = useCallback(
     (snap: GainsDuelPositionsSnapshot, sessionWallet: string) => {
       const me = normAddr(sessionWallet)
-      const mine: GainsPositionUpdate[] = []
-      const theirs: GainsPositionUpdate[] = []
+      const rawMine: GainsPositionUpdate[] = []
+      const rawTheirs: GainsPositionUpdate[] = []
 
       for (const u of snap.users) {
         const w = normAddr(u.wallet)
         if (w === me) {
-          mine.push(...u.positions)
+          rawMine.push(...u.positions)
         } else {
-          theirs.push(...u.positions)
+          rawTheirs.push(...u.positions)
         }
       }
+
+      for (const p of rawMine) logPositionShapeIfNew(p, "my")
+      for (const p of rawTheirs) logPositionShapeIfNew(p, "opponent")
+
+      /**
+       * Filtrage par chain AVANT toute autre lecture : scores PnL, state React, batch close, etc.
+       * Sans ça, une position pré-existante sur une autre chaîne (ex: Arbitrum Sepolia) peut battre
+       * le trade mainnet de la duel dans `bestPnlScoreFromPositions` → mauvais winner affiché.
+       */
+      const myScope = myChainScopeRef.current
+      const oppScope = opponentChainScopeRef.current
+      const mine = myScope
+        ? rawMine.filter((p) => p.chainId === myScope)
+        : rawMine
+      const theirs = oppScope
+        ? rawTheirs.filter((p) => p.chainId === oppScope)
+        : rawTheirs
+      const myDropped = rawMine.length - mine.length
+      const oppDropped = rawTheirs.length - theirs.length
+      if (myDropped > 0 || oppDropped > 0) {
+        const sig = `${myDropped}:${oppDropped}:${myScope ?? ""}:${oppScope ?? ""}`
+        if (sig !== lastScopeFilterLogRef.current) {
+          lastScopeFilterLogRef.current = sig
+          console.log(LOG, "snapshot scope filter applied", {
+            myScope,
+            oppScope,
+            myTotal: rawMine.length,
+            myKept: mine.length,
+            myDropped,
+            myDroppedIds: rawMine
+              .filter((p) => p.chainId !== myScope)
+              .map((p) => p.id),
+            oppTotal: rawTheirs.length,
+            oppKept: theirs.length,
+            oppDropped,
+            oppDroppedIds: rawTheirs
+              .filter((p) => p.chainId !== oppScope)
+              .map((p) => p.id),
+          })
+        }
+      }
+
+      console.log(LOG, "duel snapshot applied", {
+        remainingSeconds: snap.remainingSeconds,
+        myPositionsRaw: rawMine.length,
+        myPositions: mine.length,
+        opponentPositionsRaw: rawTheirs.length,
+        opponentPositions: theirs.length,
+        myScope,
+        oppScope,
+      })
 
       const now = Date.now()
       const ended = snap.remainingSeconds <= 0
@@ -292,6 +402,15 @@ export function GainsRealtimeProvider({
             : mine.length > 0
               ? [...mine]
               : null
+        console.log(LOG, "duel end: captured auto-close batch", {
+          source: fromOneSecond && fromOneSecond.length > 0 ? "t=1s snapshot" : "t=0 snapshot",
+          count: duelEndCloseTargetsRef.current?.length ?? 0,
+          ids: duelEndCloseTargetsRef.current?.map((p) => p.id) ?? [],
+          chains: duelEndCloseTargetsRef.current?.map((p) => p.chainId) ?? [],
+          markets: duelEndCloseTargetsRef.current?.map((p) => p.marketId) ?? [],
+          warning:
+            "This batch = ALL open positions for this wallet at t=1s. Pre-existing positions unrelated to the duel will also be closed.",
+        })
         setMyPositions([])
         setOpponentPositions([])
         setPnlHistoryMy(new Map())
@@ -327,6 +446,8 @@ export function GainsRealtimeProvider({
 
   const applyLegacyPositionsArray = useCallback(
     (batch: GainsPositionUpdate[]) => {
+      for (const p of batch) logPositionShapeIfNew(p, "my")
+      console.log(LOG, "legacy positions array applied", { count: batch.length })
       const now = Date.now()
       lastMyScoreRef.current = null
       lastOpponentScoreRef.current = null
@@ -591,11 +712,17 @@ export function GainsRealtimeProvider({
         wsRef.current = null
       }
       subscribedDuelIdRef.current = null
+      myChainScopeRef.current = null
+      opponentChainScopeRef.current = null
+      lastScopeFilterLogRef.current = ""
     }
   }, [walletAddress, applyDuelSnapshot, applyLegacyPositionsArray])
 
   const subscribePositions = useCallback(
-    (duelId: string) => {
+    (
+      duelId: string,
+      chainScope?: { my?: string | null; opponent?: string | null },
+    ) => {
       const id = duelId.trim()
       if (!id) {
         console.log(LOG, "subscribe: skipped — empty duelId")
@@ -614,12 +741,28 @@ export function GainsRealtimeProvider({
         setLastWsError("WebSocket not connected — try again in a moment.")
         return
       }
+      /** Les scopes sont stockés avant l'envoi — le prochain snapshot WS les appliquera. */
+      myChainScopeRef.current = chainScope?.my ?? null
+      opponentChainScopeRef.current = chainScope?.opponent ?? null
+      lastScopeFilterLogRef.current = ""
       const payload = {
         event: "subscribe",
         data: { duelId: id },
       }
       subscribedDuelIdRef.current = id
-      console.log(LOG, "subscribe: sending", payload)
+      console.log(LOG, "subscribe: sending", {
+        ...payload,
+        chainScope: {
+          my: myChainScopeRef.current,
+          opponent: opponentChainScopeRef.current,
+        },
+        ...(myChainScopeRef.current == null
+          ? {
+              warning:
+                "No my-chain scope provided — WS positions will NOT be filtered. PnL outcome may reflect pre-existing positions on other chains.",
+            }
+          : {}),
+      })
       resetPositionState()
       try {
         ws.send(JSON.stringify(payload))
@@ -650,6 +793,9 @@ export function GainsRealtimeProvider({
       console.warn(LOG, "unsubscribe: send failed", e)
     }
     subscribedDuelIdRef.current = null
+    myChainScopeRef.current = null
+    opponentChainScopeRef.current = null
+    lastScopeFilterLogRef.current = ""
     resetPositionState()
   }, [resetPositionState])
 

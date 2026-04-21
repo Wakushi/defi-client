@@ -11,26 +11,21 @@ import {
   gamePanelTopAccent,
 } from "@/components/game-ui";
 import {
+  extractPositionIdFromMobulaId,
   gainsPositionStreamKey,
+  positionPnlUsd,
+  prettyChainFromChainId,
+  prettyPairFromMarketId,
   type GainsApiChain,
   type GainsPositionPnlTick,
   type GainsPositionUpdate,
 } from "@/types/gains-api";
 
-function isLong(p: GainsPositionUpdate): boolean {
-  if (typeof p.long === "boolean") return p.long;
-  if (typeof p.isLong === "boolean") return p.isLong;
-  return false;
-}
+/** Empêche un double-clic / re-render d'émettre deux fois la même close → Dynamic 429. */
+const inFlightCloseIds = new Set<string>();
 
-function liqPrice(p: GainsPositionUpdate): number | null {
-  if (typeof p.liquidationPrice === "number" && Number.isFinite(p.liquidationPrice)) {
-    return p.liquidationPrice;
-  }
-  if (typeof p.liqUsdDecimaled === "number" && Number.isFinite(p.liqUsdDecimaled)) {
-    return p.liqUsdDecimaled;
-  }
-  return null;
+function isLong(p: GainsPositionUpdate): boolean {
+  return p.side === "BUY";
 }
 
 function fmtUsd(n: number, maxFrac = 2): string {
@@ -222,19 +217,36 @@ function PositionCard({
   const rawId = useId();
   const gradientId = `pnl-grad-${rawId.replace(/:/g, "")}`;
   const long = isLong(pos);
-  const liq = liqPrice(pos);
-  const pairLabel = pos.pair?.trim() || `Pair #${pos.pairIndex}`;
+  const liq =
+    typeof pos.liquidationPriceQuote === "number" &&
+    Number.isFinite(pos.liquidationPriceQuote)
+      ? pos.liquidationPriceQuote
+      : null;
+  const pairLabel = prettyPairFromMarketId(pos.marketId);
   const currentPx =
-    typeof pos.currentPriceUsdDecimaled === "number" && Number.isFinite(pos.currentPriceUsdDecimaled)
-      ? pos.currentPriceUsdDecimaled
+    typeof pos.currentPriceQuote === "number" &&
+    Number.isFinite(pos.currentPriceQuote)
+      ? pos.currentPriceQuote
+      : null;
+  const entryPx =
+    typeof pos.entryPriceQuote === "number" &&
+    Number.isFinite(pos.entryPriceQuote)
+      ? pos.entryPriceQuote
       : null;
   const collateral =
     typeof pos.collateral === "number" && Number.isFinite(pos.collateral) ? pos.collateral : null;
   const pct =
-    typeof pos.percentChange === "number" && Number.isFinite(pos.percentChange)
-      ? pos.percentChange
+    typeof pos.unrealizedPnlPercent === "number" &&
+    Number.isFinite(pos.unrealizedPnlPercent)
+      ? pos.unrealizedPnlPercent
       : null;
-  const pnlPositive = pos.pnl >= 0;
+  const pnlUsd = positionPnlUsd(pos);
+  const pnlPositive = pnlUsd >= 0;
+  const leverage =
+    typeof pos.currentLeverage === "number" && Number.isFinite(pos.currentLeverage)
+      ? pos.currentLeverage
+      : null;
+  const chainLabel = prettyChainFromChainId(pos.chainId);
 
   const [pnlTrend, setPnlTrend] = useState<"up" | "down" | "flat">("flat");
   const lastPnlRef = useRef<number | null>(null);
@@ -248,11 +260,8 @@ function PositionCard({
       return;
     }
 
-    const pnl = typeof pos.pnl === "number" && Number.isFinite(pos.pnl) ? pos.pnl : null;
-    const price =
-      typeof pos.currentPriceUsdDecimaled === "number" && Number.isFinite(pos.currentPriceUsdDecimaled)
-        ? pos.currentPriceUsdDecimaled
-        : null;
+    const pnl = Number.isFinite(pnlUsd) ? pnlUsd : null;
+    const price = currentPx;
 
     const prevPx = lastPriceRef.current;
     const prevPnl = lastPnlRef.current;
@@ -276,7 +285,7 @@ function PositionCard({
 
     if (price !== null) lastPriceRef.current = price;
     if (pnl !== null) lastPnlRef.current = pnl;
-  }, [pos.pnl, pos.currentPriceUsdDecimaled, long, liveDuelVisuals]);
+  }, [pnlUsd, currentPx, long, liveDuelVisuals]);
 
   const trendClass =
     liveDuelVisuals &&
@@ -356,8 +365,7 @@ function PositionCard({
             <p
               className={`mt-0.5 font-[family-name:var(--font-share-tech)] text-[var(--game-text-muted)] ${compact ? "text-[9px] leading-tight" : "text-[11px]"}`}
             >
-              {pos.chain ? String(pos.chain) : "—"} · index {pos.index ?? 0}
-              {pos.tradeType != null ? ` · type ${pos.tradeType}` : ""}
+              {chainLabel} · {pos.exchange}
             </p>
           </div>
           <div className="flex flex-wrap justify-end gap-2">
@@ -382,17 +390,19 @@ function PositionCard({
             >
               {long ? "Long" : "Short"}
             </span>
-            <span
-              className={`rounded-sm border px-2.5 py-1 font-[family-name:var(--font-orbitron)] text-[10px] font-bold uppercase tracking-wider ${
-                liveDuelVisuals && duelPlayerSide === "my"
-                  ? "border-indigo-500/45 bg-indigo-950/35 text-indigo-200/95 [text-shadow:0_0_10px_rgba(129,140,248,0.35)]"
-                  : liveDuelVisuals
-                    ? "border-amber-500/45 bg-amber-950/35 text-amber-200/95 [text-shadow:0_0_10px_rgba(251,191,36,0.35)]"
-                    : "border-[var(--game-amber)]/50 bg-[rgba(255,200,74,0.1)] text-[var(--game-amber)]"
-              }`}
-            >
-              {pos.leverage}×
-            </span>
+            {leverage != null ? (
+              <span
+                className={`rounded-sm border px-2.5 py-1 font-[family-name:var(--font-orbitron)] text-[10px] font-bold uppercase tracking-wider ${
+                  liveDuelVisuals && duelPlayerSide === "my"
+                    ? "border-indigo-500/45 bg-indigo-950/35 text-indigo-200/95 [text-shadow:0_0_10px_rgba(129,140,248,0.35)]"
+                    : liveDuelVisuals
+                      ? "border-amber-500/45 bg-amber-950/35 text-amber-200/95 [text-shadow:0_0_10px_rgba(251,191,36,0.35)]"
+                      : "border-[var(--game-amber)]/50 bg-[rgba(255,200,74,0.1)] text-[var(--game-amber)]"
+                }`}
+              >
+                {leverage >= 10 ? leverage.toFixed(0) : leverage.toFixed(1)}×
+              </span>
+            ) : null}
           </div>
         </div>
 
@@ -417,7 +427,7 @@ function PositionCard({
               }`}
             >
               {pnlPositive ? "+" : ""}
-              {fmtUsd(pos.pnl, 4)} USDC
+              {fmtUsd(pnlUsd, 4)} USDC
             </p>
             {pct != null ? (
               <p
@@ -444,7 +454,7 @@ function PositionCard({
             <p
               className={`font-[family-name:var(--font-share-tech)] font-medium tabular-nums text-[var(--game-text)] ${compact ? "text-xs" : "text-sm"}`}
             >
-              ${fmtUsd(pos.openPrice, 2)}
+              {entryPx != null ? `$${fmtUsd(entryPx, 4)}` : "—"}
             </p>
           </div>
           <div>
@@ -456,7 +466,7 @@ function PositionCard({
             <p
               className={`font-[family-name:var(--font-share-tech)] font-medium tabular-nums text-[var(--game-text)] ${compact ? "text-xs" : "text-sm"}`}
             >
-              {currentPx != null ? `$${fmtUsd(currentPx, 2)}` : "—"}
+              {currentPx != null ? `$${fmtUsd(currentPx, 4)}` : "—"}
             </p>
           </div>
           <div>
@@ -479,7 +489,7 @@ function PositionCard({
           >
             Liquidation ≈{" "}
             <span className={liveDuelVisuals ? "text-zinc-400" : "text-[var(--game-amber)]"}>
-              ${fmtUsd(liq, 2)}
+              ${fmtUsd(liq, 4)}
             </span>
           </p>
         ) : null}
@@ -527,8 +537,7 @@ function PositionCard({
           {readOnly ? (
             <div className="pointer-events-none select-none opacity-0" aria-hidden>
               <p className={`${gameMuted} mb-2 ${compact ? "text-[9px] leading-tight" : "text-[11px]"}`}>
-                <code className="text-[var(--game-cyan)]">closeTradeMarket</code>(tradeIndex, expectedPrice) — index{" "}
-                <span className="font-[family-name:var(--font-share-tech)] text-[var(--game-text)]">0</span>, prix mark $0 → uint64 1e10
+                Close position at market
               </p>
               <button
                 type="button"
@@ -541,19 +550,11 @@ function PositionCard({
           ) : compactLiveCloseUi ? null : (
             <>
               <p className={`${gameMuted} mb-2 ${compact ? "text-[9px] leading-tight" : "text-[11px]"}`}>
-                <code className="text-[var(--game-cyan)]">closeTradeMarket</code>(tradeIndex, expectedPrice) — index{" "}
+                Close{" "}
                 <span className="font-[family-name:var(--font-share-tech)] text-[var(--game-text)]">
-                  {pos.index ?? 0}
-                </span>
-                , prix mark{" "}
-                {currentPx != null ? (
-                  <span className="font-[family-name:var(--font-share-tech)] text-[var(--game-text)]">
-                    ${fmtUsd(currentPx, 2)}
-                  </span>
-                ) : (
-                  "—"
-                )}{" "}
-                → uint64 1e10
+                  {pairLabel}
+                </span>{" "}
+                at market
               </p>
               <button
                 type="button"
@@ -630,43 +631,78 @@ export function GainsLivePositionsPanel({
 
   const closePosition = useCallback(
     async (pos: GainsPositionUpdate) => {
+      if (inFlightCloseIds.has(pos.id)) {
+        console.warn("[panel-close] duplicate click ignored", { id: pos.id });
+        return;
+      }
+      inFlightCloseIds.add(pos.id);
       const key = historyKeyForPosition(pos);
-      const mark =
-        typeof pos.currentPriceUsdDecimaled === "number" &&
-        Number.isFinite(pos.currentPriceUsdDecimaled)
-          ? pos.currentPriceUsdDecimaled
-          : null;
-      if (mark == null) return;
-
       setCloseErr(null);
       setCloseTx(null);
       setClosingKey(key);
+      const positionId = extractPositionIdFromMobulaId(pos.id, pos.address);
+      const body = {
+        dex: pos.exchange,
+        chainId: pos.chainId,
+        marketId: pos.marketId,
+        positionId,
+        trigger: "gains-live-panel" as const,
+      };
+      console.log("[panel-close] POST /api/perp-positions/close", { id: pos.id, ...body });
+      const t0 = performance.now();
       try {
-        const r = await fetch("/api/trade/close-market", {
+        const r = await fetch("/api/perp-positions/close", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
-          body: JSON.stringify({
-            tradeIndex: pos.index ?? 0,
-            currentPriceUsdDecimaled: mark,
-            gainsChain,
-          }),
+          body: JSON.stringify(body),
         });
-        const data = (await r.json()) as { error?: string; txHash?: string };
+        const data = (await r.json()) as {
+          error?: string;
+          txHash?: string;
+          rateLimited?: boolean;
+        };
+        const durationMs = Math.round(performance.now() - t0);
         if (!r.ok) {
+          if (data.rateLimited) {
+            console.error("[panel-close] DYNAMIC_RATE_LIMITED", {
+              id: pos.id,
+              status: r.status,
+              error: data.error,
+              durationMs,
+            });
+          } else {
+            console.error("[panel-close] failed", {
+              id: pos.id,
+              status: r.status,
+              error: data.error,
+              durationMs,
+            });
+          }
           setCloseErr(data.error ?? "Close failed.");
           return;
         }
+        console.log("[panel-close] ok", {
+          id: pos.id,
+          txHash: data.txHash,
+          durationMs,
+        });
         if (data.txHash) {
           setCloseTx(data.txHash);
         }
-      } catch {
+      } catch (e) {
+        console.error("[panel-close] network error", {
+          id: pos.id,
+          error: e,
+          durationMs: Math.round(performance.now() - t0),
+        });
         setCloseErr("Network error.");
       } finally {
+        inFlightCloseIds.delete(pos.id);
         setClosingKey(null);
       }
     },
-    [historyKeyForPosition, gainsChain],
+    [historyKeyForPosition],
   );
 
   const cards = useMemo(() => {
@@ -679,9 +715,6 @@ export function GainsLivePositionsPanel({
       };
     });
   }, [positions, pnlHistoryByKey, historyKeyForPosition]);
-
-  const markReady = (p: GainsPositionUpdate) =>
-    typeof p.currentPriceUsdDecimaled === "number" && Number.isFinite(p.currentPriceUsdDecimaled);
 
   const panelShell = liveDuelVisuals
     ? duelLiveSoberShell
@@ -767,7 +800,7 @@ export function GainsLivePositionsPanel({
                 history={history}
                 onCloseMarket={() => void closePosition(pos)}
                 closing={closingKey === key}
-                canClose={markReady(pos)}
+                canClose={Boolean(pos.marketId)}
                 readOnly={readOnly || duelEnded}
                 cardLabel={positionCardLabel ?? "Live position"}
                 compact={compact}
